@@ -13,6 +13,8 @@ import * as z from "zod";
 import { auth, signInWithApplePopup, signInWithGooglePopup } from "../firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 
+axios.defaults.withCredentials = true;
+
 function SignUp() {
   //zod schema
   const signupSchema = z
@@ -46,7 +48,7 @@ function SignUp() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const id = location.state?.id || 1;
+  const id = location.state?.id || 2;
   let category = "";
   if (id === 1) {
     category = "organisation";
@@ -77,11 +79,15 @@ function SignUp() {
     const accountcreate = toast.loading("creating account");
     try {
       //sending post request to backend
-      const response = await axios.post(`${BACKEND_URL}/auth/signup`, {
-        email: signupInputs.email,
-        password: signupInputs.password,
-        category: category,
-      });
+      const response = await axios.post(
+        `${BACKEND_URL}/auth/signup`,
+        {
+          email: signupInputs.email,
+          password: signupInputs.password,
+          category: category,
+        },
+        { withCredentials: true }
+      );
 
       // adding to firebase
 
@@ -116,9 +122,7 @@ function SignUp() {
         }
       }
 
-      const jwt = response.data.token;
-      localStorage.setItem("token", jwt);
-      console.log(jwt);
+    
     } catch (error: any) {
       toast.dismiss(accountcreate);
       if (error.response) {
@@ -131,46 +135,86 @@ function SignUp() {
     }
   }
 
-  async function handleGoogleSignup() {
+  async function handleGoogleSignup(e: any) {
+    e.preventDefault();
+    
+    const loadingToast = toast.loading("Signing up with Google...");
+    
     try {
       const response = await signInWithGooglePopup();
-
-      console.log(response);
-
-      const axiosResponse = await axios.post(`${BACKEND_URL}/signup`, {
-        email: response.user.email,
-        category: category,
-        password: response.user.uid,
-      }, {
-        withCredentials: true
-      });
-
-      const userid = axiosResponse.data.id;
-
-      console.log(userid);
-
-      localStorage.setItem("Id", userid);
-
-      if (id === 1) {
-        navigate(`/signup/organisation/${userid}`, { state: userid });
-      } else if (id === 2) {
-        navigate(`/signup/doctor/${userid}`, { state: userid });
-      } else if (id == 3) {
-        navigate(`/signup/student/${userid}`, { state: userid });
+      
+      if (!response.user?.email) {
+        toast.dismiss(loadingToast);
+        toast.error("Could not get email from Google account");
+        return;
       }
 
-      console.log(axiosResponse);
-    } catch (e) {
-      console.log(e);
+      const axiosResponse = await axios.post(
+        `${BACKEND_URL}/auth/signup`,
+        {
+          email: response.user.email,
+          category: category,
+          password: response.user.uid,
+        },
+        {
+          withCredentials: true,
+        }
+      );
+
+      const userid = axiosResponse.data.id;
+      localStorage.setItem("Id", userid);
+      const token = await response.user.getIdToken();
+      localStorage.setItem("token", token);
+
+      toast.dismiss(loadingToast);
+      toast.success("Signup successful!");
+
+      // Navigate based on category
+      switch (id) {
+        case 1:
+          navigate(`/signup/organisation/${userid}`, { state: userid });
+          break;
+        case 2:
+          navigate(`/signup/doctor/${userid}`, { state: userid });
+          break;
+        case 3:
+          navigate(`/signup/student/${userid}`, { state: userid });
+          break;
+        default:
+          toast.error("Invalid user category");
+      }
+
+    } catch (error: any) {
+      toast.dismiss(loadingToast);
+      
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast.error("Sign-in popup was closed. Please try again.");
+        return;
+      }
+
+      if (error.code === 'auth/cancelled-popup-request') {
+        toast.error("Another popup is already open");
+        return;
+      }
+
+      if (error.response) {
+        // Backend server error response
+        toast.error(`Signup failed: ${error.response.data}`);
+      } else if (error.request) {
+        // No response from server
+        toast.error("Could not connect to server. Please try again later.");
+      } else {
+        // Other errors
+        toast.error("An unexpected error occurred. Please try again.");
+      }
+      
+      console.error("Signup error:", error);
     }
   }
 
-
   const handleAppleSignup = async () => {
-
-    await signInWithApplePopup()
-
-  } 
+    await signInWithApplePopup();
+  };
 
   return (
     <div className="bg-slate-100 flex items-center justify-center h-screen">

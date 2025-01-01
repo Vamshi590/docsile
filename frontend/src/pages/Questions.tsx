@@ -10,6 +10,10 @@ import TopNavbar from "@/components/TopNavbar";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import { HiOutlineLocationMarker } from "react-icons/hi";
 import { capitalizeFirstLetter, truncateString } from "@/functions";
+import axios from "axios";
+import { BACKEND_URL } from "@/config";
+
+
 
 function Questions() {
   // const [showHeader, setShowHeader] = useState(true);
@@ -46,6 +50,34 @@ function Questions() {
       }
     };
   }, [lastScrollY]);
+
+  const userid = localStorage.getItem("Id");
+
+
+  
+  const [question, setQuestion] = useState<any>();
+
+  useEffect(() => {
+    async function getQuestion() {
+      try {
+        const response = await axios.get(
+          `${BACKEND_URL}/questions/${userid}`
+        );
+        setQuestion(response.data);
+        
+      } catch (e) {
+        console.log(e);
+      }
+    }
+
+    getQuestion();
+  }, []);
+
+  if(question) {
+      console.log(question.data);
+
+  }
+
 
   return (
     <div className="bg-slate-100 min-h-screen flex flex-col">
@@ -128,30 +160,22 @@ function Questions() {
                 </div>
               </div>
 
-              <QuestionCard
-                cardprofileimg={profilepic}
-                questioner={"Dr. Lavanya Seelam"}
-                questionerdetails={"Orthopedic surgeon"}
-                questiondate={"Oct 7"}
-                question={"What are the main reasons for weakness in bone?"}
-                questiondescription={
-                  "As we know today's life there are many cases of heart attacks which are very terrifying. What do you think would be the cause for this unimagined heart attack?"
-                }
-                commentimg={cardprofileimg}
-              />
-
-              <QuestionCard
-                cardprofileimg={cardprofileimg}
-                questionimg={logo}
-                questioner={"Dr. Sriprada Jorige"}
-                questionerdetails={"Cardiologist"}
-                questiondate={"Oct 7"}
-                question={"What are the main reasons for heart attacks?"}
-                questiondescription={
-                  "As we know today's life there are many cases of heart attacks which are very terrifying. What do you think would be the cause for this unimagined heart attack?"
-                }
-                commentimg={profilepic}
-              />
+              {question?.data?.map((q: any) => (
+                <QuestionCard
+                  key={q.id}
+                  cardprofileimg={q.User.profileImage || profilepic}
+                  questioner={q.User.name}
+                  questionerdetails={`${q.User.department} | ${q.User.organisation_name}`}
+                  questiondate={new Date(q.asked_at).toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                  })}
+                  question={q.question}
+                  questiondescription={q.question_description}
+                  commentimg={cardprofileimg}
+                  id={q.id.toString()}
+                />
+              ))}
 
               <div className="lg:hidden">
                 <BottomNavbar showNavbar={showNavbar} />

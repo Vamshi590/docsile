@@ -20,7 +20,7 @@ export function getCategoryId(category: string): number {
     case "organisation": return 1;
     case "doctor": return 2;
     case "student": return 3;
-    default: return 1;
+    default: return 2;
   }
 }
   

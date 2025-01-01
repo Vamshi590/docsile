@@ -25,7 +25,7 @@ function Category() {
 
     if (googleEmail && googlePassword) {
       try {
-        const response = await axios.post(`${BACKEND_URL}/signup`, {
+        const response = await axios.post(`${BACKEND_URL}/auth/signup`, {
           email: googleEmail,
           password: googlePassword,
           category: category,
@@ -42,7 +42,7 @@ function Category() {
       }
     } else {
       // Handle regular navigation to signup
-      navigate(`/signup`, { state: { id: getCategoryId(category)} });
+      navigate(`/auth/signup`, { state: { id: getCategoryId(category)} });
     }
   }
 

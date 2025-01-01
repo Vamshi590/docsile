@@ -6,13 +6,83 @@ import { FaBold, FaImage, FaItalic, FaLink, FaUnderline } from "react-icons/fa";
 import { AiOutlineLike } from "react-icons/ai";
 import { PiShareFatLight } from "react-icons/pi";
 import test5img from "../assets/test5.jpg";
+import { useEffect, useState } from "react";
+import axios from "axios";
+import { BACKEND_URL } from "@/config";
+import { toast, Toaster } from "sonner";
 
 function QuestionPage() {
   const images = [test5img];
 
+  const [answer, setAnswer] = useState("");
+
+  const userid = localStorage.getItem("Id");
+
+  console.log(userid);
+
+  const questionId = 8;
+
+  const [question, setQuestion] = useState<any>();
+
+  useEffect(() => {
+    async function getQuestion() {
+      try {
+        const response = await axios.get(
+          `${BACKEND_URL}/questions/${userid}`
+        );
+        setQuestion(response.data);
+        
+      } catch (e) {
+        console.log(e);
+      }
+    }
+
+    getQuestion();
+  }, []);
+
+  if(question) {
+      console.log(question.data);
+
+  }
+
+
+  async function handlePostAnswerClick() {
+    if (!answer.trim()) {
+      toast.error("Please write an answer before posting");
+      return;
+    }
+
+    const promise = async () => {
+      try {
+        const response = await axios.post(
+          `${BACKEND_URL}/answer/${questionId}`,
+          {
+            answer: answer,
+            id: userid,
+          }
+        );
+
+        if (response.data) {
+          setAnswer(""); // Clear the answer field
+          return "Answer posted successfully!";
+        }
+      } catch (e: any) {
+        throw new Error(e.response?.data?.message || "Failed to post answer");
+      }
+    };
+
+    toast.promise(promise(), {
+      loading: "Posting your answer...",
+      success: (data) => data,
+      error: (err) => err.message,
+    });
+  }
+
   return (
     <div className="bg-white min-h-screen flex flex-col">
       <TopNavbar />
+
+      <Toaster />
 
       <div className="container mx-auto flex flex-col pt-4 lg:pt-20 px-4 gap-3 max-w-7xl">
         <div className="flex flex-row items-center justify-between border-b border-b-gray-200 w-full px-4">
@@ -150,12 +220,24 @@ function QuestionPage() {
               name="content"
               id="content"
               rows={5}
-              placeholder="start typing here..."
+              placeholder="Start typing here..."
+              onChange={(event) => setAnswer(event.target.value)}
+              value={answer}
+              required
+              onInvalid={(e: any) => {
+                e.preventDefault();
+                toast.error("Please write an answer before posting");
+              }}
             ></textarea>
           </div>
 
-          <div className=" w-full flex flex-row justify-end mt-4">
-            <p className="text-white px-4 py-2 bg-main rounded-xl cursor-pointer">Post</p>
+          <div
+            onClick={handlePostAnswerClick}
+            className=" w-full flex flex-row justify-end mt-4"
+          >
+            <p className="text-white px-4 py-2 bg-main rounded-xl cursor-pointer">
+              Post
+            </p>
           </div>
         </div>
       </div>

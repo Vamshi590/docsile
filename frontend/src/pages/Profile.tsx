@@ -99,7 +99,6 @@ function Profile() {
       const userInfo = response.data.user;
       const questionInfo = response.data.questions;
       const postsInfo = response.data.posts;
-      const friendsInfo = response.data.friends;
       const certificatesInfo = response.data.certificates;
       const awardsInfo = response.data.awards;
       const experienceInfo = response.data.experiences;
@@ -113,7 +112,6 @@ function Profile() {
         workPlace: `${userInfo.organisation_name}`,
         questionCount: questionInfo.length,
         postsCount: postsInfo.length,
-        friendsCount: friendsInfo.length,
         posts: postsInfo,
         certificates: certificatesInfo,
         awards: awardsInfo,

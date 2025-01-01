@@ -8,9 +8,9 @@ import { BACKEND_URL } from "@/config";
 import InvitationCard from "@/components/InvitationsCard";
 import BottomNavbar from "@/components/BottomNavbar";
 import TopNavbar from "@/components/TopNavbar";
+import { toast, Toaster } from "sonner";
 
-import profilepic from "../assets/ProfilePic.svg";
-import { div } from "framer-motion/client";
+
 
 const InvitationsList: React.FC = () => {
   // const [showHeader, setShowHeader] = useState(true);
@@ -103,17 +103,16 @@ const InvitationsList: React.FC = () => {
     },
   ];
 
-  const [peopleYouMayKnow, setPeopleYouMayKnow] = useState([
-    {
-      name: "",
-      profession: "",
-      location: "",
-      connections: "",
-      profileImage: profImg,
-      organisation: "",
-      id: "",
-    },
-  ]);
+  const [peopleYouMayKnow, setPeopleYouMayKnow] = useState<{
+    name: string;
+    profession: string;
+    location: string;
+    connections: string;
+    profileImage: string;
+    organisation: string;
+    id: string;
+    isFollowing?: boolean;
+  }[]>([]);
 
   const [visibleCount1, setVisibleCount1] = useState(3); // Initially display 3 items
   const [visibleCount2, setVisibleCount2] = useState(3); // Initially display 3 items
@@ -161,6 +160,7 @@ const InvitationsList: React.FC = () => {
             connections: `${user.connectionCount || 0} connections`, // Adjust according to backend structure
             profileImage: user.profileImage || profImg, // Use default if no image provided
             id: user.id,
+            isFollowing: false, // Add default value
           })
         );
 
@@ -175,10 +175,43 @@ const InvitationsList: React.FC = () => {
     fetchConnections();
   }, []);
 
+
+  async function handleFollowClick(followerId: string) {
+    try {
+      const response = await axios.post(`${BACKEND_URL}/follow/${id}/${followerId}`);
+      if(response){
+         toast.success("Successfully followed!");
+      }
+    } catch (error) {
+      toast.error("Failed to follow user");
+      console.error(error);
+    }
+  }
+
+  async function handleUnfollow(followerId: string) {
+    try {
+      const response = await axios.post(`${BACKEND_URL}/unfollow/${id}/${followerId}`);
+      toast.success("Successfully unfollowed");
+    } catch (error) {
+      toast.error("Failed to unfollow user");
+      console.error(error);
+    }
+  }
+
+  async function handleNetworkClick() {
+    try{
+      const response = await axios.get(`${BACKEND_URL}/connections/network/${id}`);
+      console.log(response);
+    }catch(e){
+      console.log(e);
+    }
+  }
+
   return (
     <div className="bg-white flex text-left  min-h-screen ">
       <TopNavbar />
 
+      <Toaster/>
       <div className="container mx-auto flex flex-col pt-4 lg:pt-20 px-4 gap-3 max-w-7xl">
         <div className="flex lg:gap-8 w-full">
           <div className="hidden lg:block lg:w-[25%] ">
@@ -192,7 +225,7 @@ const InvitationsList: React.FC = () => {
 
                   <p className="w-full ps-2 py-2 text-sm font-semibold bg-gray-100 rounded-s-lg cursor-pointer border-r-2 border-r-main ">Follow Friends</p>
 
-                  <p className="w-full ps-2 py-2 text-sm text-gray-600 font-semibold cursor-pointer hover:bg-gray-50">Followers & Following</p>
+                  <p onClick={handleNetworkClick} className="w-full ps-2 py-2 text-sm text-gray-600 font-semibold cursor-pointer hover:bg-gray-50">Followers & Following</p>
 
                   <p className="w-full ps-2 py-2 text-sm text-gray-600 font-semibold cursor-pointer hover:bg-gray-50">Groups</p>
 
@@ -244,7 +277,10 @@ const InvitationsList: React.FC = () => {
                         connections={invitation.connections}
                         profileImage={invitation.profileImage}
                         organisation={invitation.organisation}
-                        id={"8"}
+                        id={"8"} 
+                        handleClick={() => id && handleFollowClick(id)}
+                        onUnfollow={() => id && handleUnfollow(id)}
+                        isFollowing={false}
                       />
                     </div>
                     
@@ -271,7 +307,7 @@ const InvitationsList: React.FC = () => {
                 </h2>
                 
                   <div className="grid grid-cols-12 w-full gap-4">
-                    {invitations1
+                    {peopleYouMayKnow
                       .slice(0, visibleCount2)
                       .map((person, index) => (
                         <div className="col-span-12 md:col-span-6 lg:col-span-4">
@@ -284,6 +320,9 @@ const InvitationsList: React.FC = () => {
                             profileImage={person.profileImage}
                             organisation={person.organisation}
                             id={person.id}
+                            isFollowing={person.isFollowing}
+                            handleClick={() => handleFollowClick(person.id)}
+                            onUnfollow={() => handleUnfollow(person.id)}
                           />
                         </div>
                       ))}

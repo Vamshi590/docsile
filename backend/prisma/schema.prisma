@@ -29,10 +29,11 @@ model User {
   verified                      Boolean                  @default(false)
   date_of_birth                 DateTime?
   created_at                    DateTime                 @default(now())
+  last_logged_in                DateTime?
+  medical_counsel               String?
   skills                        Skills[]
   posts                         Posts[]
   questions                     Questions[]
-  friends                       Friends[]
   certifications                Certifications[]
   memberships                   Memberships[]
   education                     Education[]
@@ -40,6 +41,20 @@ model User {
   jobs                          Jobs[]
   conferrences                  Conferrences[]
   achievementsAwards            AchievementsAwards[]
+   following    Follow[] @relation("following")
+  followers    Follow[] @relation("followers")
+}
+
+model Follow {
+   id        String   @id @default(uuid())
+  followerId Int
+  followingId Int
+
+  follower     User     @relation("followers", fields: [followerId], references: [id])
+  following    User     @relation("following", fields: [followingId], references: [id])
+
+  createdAt DateTime @default(now())
+  @@unique([followerId, followingId]) // Ensure a user can't follow the same user multiple times
 }
 
 model Doctors {
@@ -158,6 +173,8 @@ model Questions {
   id                   Int                  @id @default(autoincrement())
   User                 User?                @relation(fields: [userId], references: [id])
   userId               Int?
+  anonymous            Boolean?
+  urgency              String?
   question             String
   question_description String
   asked_at             DateTime             @default(now())
@@ -212,13 +229,7 @@ model Insightful {
   insightful_user_id String?
 }
 
-//friends
 
-model Friends {
-  id     Int   @id @default(autoincrement())
-  User   User? @relation(fields: [userId], references: [id])
-  userId Int?
-}
 
 //certifications
 

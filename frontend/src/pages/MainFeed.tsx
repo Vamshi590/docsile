@@ -33,6 +33,7 @@ import test6img from "../assets/test6.webp";
 import { Dialog } from "@/components/Dialog";
 import axios from "axios";
 import { BACKEND_URL } from "@/config";
+import { toast, Toaster } from "sonner";
 
 function MainFeed() {
   const location = useLocation();
@@ -90,25 +91,56 @@ function MainFeed() {
   }
 
   async function handleAskQuestion() {
+    const loading = toast.loading("Checking verification status");
     try {
       const response = await axios.get(`${BACKEND_URL}/check-verification`, {
         params: { id: userId },
       });
-      console.log(response);
       const verified = response.data.verified;
 
-      if (!verified) {
+      if (verified) {
+        toast.dismiss(loading);
+        toast.success("Verified redirecting to ask question");
+        navigate(`/ask-question/${userId}`);
+      } else {
+        toast.dismiss(loading);
+        toast.warning("Please verify your medical registration first");
         setShowDialog(true);
       }
     } catch (e) {
-      console.log(e);
+      toast.error("Something went wrong. Please try again later");
+      console.error(e);
     }
   }
 
-  function handleAddPost() {
-    navigate(`/publish-post/${userId}`);
-  }
+  async function handleAddPost() {
 
+    const loading = toast.loading("Checking verification status");
+
+    console.log(typeof(userId));
+
+    try{
+      const response = await axios.get(`${BACKEND_URL}/check-verification`, {
+        params: { id: userId },
+      });
+      const verified = response.data.verified;
+
+      if (verified) {
+        toast.dismiss(loading);
+        toast.success("Verified redirecting to add post");
+        navigate(`/publish-post/${userId}`);
+      } else {
+        toast.dismiss(loading);
+        toast.warning("Please verify your medical registration first");
+        setShowDialog(true);
+      }
+    }
+    catch (e) {
+      toast.dismiss(loading);
+      toast.error("Something went wrong. Please try again later");
+      console.error(e);
+  }
+  }
   function handleShareReport() {}
 
   //backend
@@ -122,19 +154,27 @@ function MainFeed() {
   }
 
   async function handleRegisterClick() {
+    const loading = toast.loading("Verifying doctor details");
     try {
       const response = await axios.post(`${BACKEND_URL}/verify-doctor`, {
         registrationNo: text,
+        medicalCouncil : "Andhra Pradesh Medical Council",
+        userId : userId
       });
 
       console.log(response.data);
 
       if (response.data.error) {
+        toast.dismiss(loading);
+        toast.error(response.data.error);
         console.error("Doctor not found or invalid registration number");
       } else {
+        toast.dismiss(loading);
         setShowDialog(false);
       }
     } catch (error) {
+      toast.dismiss(loading);
+      toast.error("Something went wrong. Please try again later");
       console.error("Error fetching doctor details:", error);
     }
   }
@@ -143,6 +183,7 @@ function MainFeed() {
     <UserContext.Provider value={{ id: userId }}>
       <div className="bg-white flex  min-h-screen  flex-col ">
         <TopNavbar />
+        <Toaster/>
 
         <Dialog isOpen={showDialog} onClose={handleCloseDialog}>
           <div className="text-center p-2">

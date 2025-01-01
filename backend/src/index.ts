@@ -5,6 +5,10 @@ import { cors } from "hono/cors";
 import { withAccelerate } from "@prisma/extension-accelerate";
 import { getCookie, setCookie } from "hono/cookie";
 import auth from "./Auth/auth";
+import signup from "./signup";
+import followRoute from "./follow/FollowRoute";
+import questions from "./questionAndAnswers/Questions";
+import answers from "./questionAndAnswers/answers";
 
 const app = new Hono<{
   Bindings: {
@@ -13,183 +17,81 @@ const app = new Hono<{
   };
 }>();
 //cors middleware
-app.use("/*", cors());
-app.route("/auth" , auth);
+app.use(
+  "/*",
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+    allowMethods: ["POST", "GET", "OPTIONS"],
+    allowHeaders: ["Content-Type"],
+  })
+);
+
+app.route("/auth", auth);
+app.route("/signup", signup);
+app.route("/follow", followRoute)
+app.route("/questions",questions)
+app.route("/answer",answers)
 
 
-
-
-
-
-
-//signup//doctor
-
-app.post("/signup/doctor", async (c) => {
-  const body = await c.req.json();
-
-  const prisma = new PrismaClient({
-    datasourceUrl: c.env.DATABASE_URL,
-  }).$extends(withAccelerate());
-
-  try {
-    const response = await prisma.user.update({
-      where: {
-        id: body.id,
-      },
-      //@ts-ignore
-      data: {
-        name: body.name,
-        country: body.country,
-        city: body.city,
-        organisation_name: body.organisation_name,
-        specialisation_field_of_study: body.specialisation_field_of_study,
-        gender: body.gender,
-        category: "doctor",
-      },
-    });
-
-  
-    if (response) {
-      return c.json("Success");
-    }
-  } catch (e: any) {
-    console.error(e);
-  }
-});
-
-//signup/student
-
-app.post("/signup/student", async (c) => {
-  const body = await c.req.json();
-
-  const prisma = new PrismaClient({
-    datasourceUrl: c.env.DATABASE_URL,
-  }).$extends(withAccelerate());
-
-  try {
-    const response = await prisma.user.update({
-      where: {
-        id: body.id,
-      },
-      data: {
-        name: body.name,
-        country: body.country,
-        city: body.city,
-        organisation_name: body.organisation_name,
-        specialisation_field_of_study: body.specialisation_field_of_study,
-        department: body.department,
-        gender: body.gender,
-        category: "student",
-      },
-    });
-
-    if (response) {
-      return c.json("Success");
-    }
-  } catch (e: any) {
-    console.error(e);
-  }
-});
-
-//signup//organisation
-
-app.post("/signup/organisation", async (c) => {
-  const body = await c.req.json();
-
-  const email = body.email;
-  const id = body.id;
-
-  const prisma = new PrismaClient({
-    datasourceUrl: c.env.DATABASE_URL,
-  }).$extends(withAccelerate());
-
-  try {
-    if (email && id) {
-      const response = await prisma.organisations.create({
-        data: {
-          email: email,
-          category: "organisation",
-          password: email,
-          organisation_type: body.organisation_type,
-          country: body.country,
-          city: body.city,
-          organisation_name: body.organisation_name,
-        },
-      });
-    }
-
-    const response = await prisma.organisations.update({
-      where: {
-        id: body.id,
-      },
-      data: {
-        organisation_type: body.organisation_type,
-        country: body.country,
-        city: body.city,
-        organisation_name: body.organisation_name,
-      },
-    });
-
-    if (response) {
-      return c.json("Success");
-    }
-  } catch (e: any) {
-    console.error(e);
-  }
-});
 
 app.get("/check-verification", async (c) => {
-  console.log("lopalki ochindhi");
-  const userid = c.req.query("id");
-
-  console.log(userid);
-  const verifiedcookie = getCookie(c, "doctortoken");
-  console.log("third");
+  const userid = c.req.query("id") || "";
+  const intUserId = parseInt(userid);
+  const verifiedcookie = getCookie(c, "verifytoken");
 
   const prisma = new PrismaClient({
     datasourceUrl: c.env.DATABASE_URL,
   }).$extends(withAccelerate());
 
   try {
-    console.log("try lo ki kud ochindhi");
     if (verifiedcookie) {
       // Verify the JWT token
-      const decoded: any = verify(verifiedcookie, c.env.JWT_SECRET);
+      const decoded: any = await verify(verifiedcookie, c.env.JWT_SECRET);
 
-      if (decoded.id === userid) {
-        // Token is valid and matches the user ID
-        return c.json({ redirect: `/ask-question/${userid}` });
+      console.log(decoded);
+
+      if (decoded.userId === intUserId) {
+        return c.json({ verified: true });
       } else {
         return c.json({ message: "Token user mismatch" }, 403);
       }
-    } else {
-      // If token is not present, check the database
-      const user = await prisma.user.findUnique({
-        where: { id: parseInt(userid || "") },
+    }
+
+    // If no cookie or invalid, check database
+    const user = await prisma.user.findUnique({
+      where: { id: parseInt(userid || "") },
+      select: {
+        register_number: true,
+        verified: true,
+        medical_counsel: true,
+        id: true,
+      },
+    });
+
+    if (!user) {
+      return c.json({ message: "User not found" }, 404);
+    }
+
+    if (user.register_number && user.verified) {
+      // User is verified, generate a new token
+      const newToken = await sign(
+        { userId: user.id, registrationNo: user.register_number, medicalCouncil: user.medical_counsel },
+        c.env.JWT_SECRET
+      );
+
+      // Set the new token in cookies
+      setCookie(c, "verifytoken", newToken, {
+        httpOnly: true,
+        maxAge: 34559999, // 400 days
+        secure: false,
+        sameSite: "strict",
+        path: "/",
       });
 
-      if (!user) {
-        return c.json({ message: "User not found" }, 404);
-      }
-
-      if (user.verified) {
-        // User is verified, generate a new JWT token
-        const newToken = await sign({ id: user.id }, c.env.JWT_SECRET);
-
-        // Set the new token in the cookies
-        setCookie(c, "authToken", newToken, {
-          httpOnly: true,
-          maxAge: 3600, // 1 hour
-          secure: true,
-          sameSite: "strict",
-          path: "/",
-        });
-
-        return c.json({ redirect: `/ask-question/${userid}`, verified: true });
-      } else {
-        // User is not verified
-        return c.json({ verified: false }, 200);
-      }
+      return c.json({ verified: true });
+    } else {
+      return c.json({ verified: false });
     }
   } catch (err) {
     console.error("Error:", err);
@@ -224,11 +126,7 @@ app.get("/profile/:id", async (c) => {
       },
     });
 
-    const friends = await prisma.friends.findMany({
-      where: {
-        userId: userid,
-      },
-    });
+  
 
     const certificates = await prisma.certifications.findMany({
       where: {
@@ -275,7 +173,6 @@ app.get("/profile/:id", async (c) => {
       user: user,
       questions: questions,
       posts: posts,
-      friends: friends,
       certificates: certificates,
       awards: awards,
       experiences: experiences,
@@ -289,35 +186,6 @@ app.get("/profile/:id", async (c) => {
 
 // ask question
 
-app.post("/ask-question/:id", async (c) => {
-  const body = await c.req.json();
-
-  const params = c.req.param();
-
-  const userid = parseInt(params.id);
-
-  const prisma = new PrismaClient({
-    datasourceUrl: c.env.DATABASE_URL,
-  }).$extends(withAccelerate());
-
-  try {
-    const question = await prisma.questions.create({
-      data: {
-        userId: userid,
-        question: body.title,
-        question_description: body.description,
-
-        questionReferences: {
-          create: body.referenceTags.map((ref: string) => ({ reference: ref })),
-        },
-      },
-    });
-
-    return c.json(question);
-  } catch (e) {
-    return c.json({ e });
-  }
-});
 
 app.post("/publish-post/:id", async (c) => {
   const body = await c.req.json();
@@ -486,18 +354,23 @@ app.get("/connections/:id", async (c) => {
       return c.json({ message: "User not found" }, 404);
     }
 
-    // Find related users with prioritized ordering
-    const relatedUsers = await prisma.user.findMany({
+    // First get exact matches
+    const exactMatches = await prisma.user.findMany({
       where: {
         AND: [
-          // Exclude the current user
           { id: { not: userid } },
           {
+            NOT: {
+              followers: {
+                some: {
+                  followingId: userid
+                }
+              }
+            }
+          },
+          {
             OR: [
-              {
-                specialisation_field_of_study:
-                  user.specialisation_field_of_study,
-              },
+              { specialisation_field_of_study: user.specialisation_field_of_study },
               { department: user.department },
               { city: user.city },
               { organisation_name: user.organisation_name },
@@ -506,16 +379,47 @@ app.get("/connections/:id", async (c) => {
         ],
       },
       orderBy: [
-        // Higher priority to mutual connections, followed by recent interactions, then affinity
-        // { mutualConnectionsCount: 'desc' },  // Add mutualConnectionsCount if available in the schema
-        // { recentInteractions: 'desc' },  // Add recentInteractions if tracked in the schema
         { specialisation_field_of_study: "desc" },
         { department: "desc" },
         { city: "desc" },
         { organisation_name: "desc" },
       ],
-      take: 50, // Take at least 50 results if available
     });
+
+    let relatedUsers = exactMatches;
+
+    // If less than 50 results, fetch additional users
+    if (exactMatches.length < 50) {
+      const remainingCount = 50 - exactMatches.length;
+      const additionalUsers = await prisma.user.findMany({
+        where: {
+          AND: [
+            { id: { not: userid } },
+            {
+              NOT: {
+                followers: {
+                  some: {
+                    followingId: userid
+                  }
+                }
+              }
+            },
+            // Exclude users already in exactMatches
+            {
+              id: {
+                notIn: exactMatches.map(user => user.id)
+              }
+            }
+          ],
+        },
+        orderBy: {
+          created_at: 'desc' // Show newest users first
+        },
+        take: remainingCount,
+      });
+
+      relatedUsers = [...exactMatches, ...additionalUsers];
+    }
 
     return c.json(relatedUsers);
   } catch (error) {
@@ -524,44 +428,205 @@ app.get("/connections/:id", async (c) => {
   }
 });
 
+app.get("/connections/network/:id", async (c) => {
+  const params = c.req.param();
+  const userid = parseInt(params.id);
+
+  const prisma = new PrismaClient({
+    datasourceUrl: c.env.DATABASE_URL,
+  }).$extends(withAccelerate());
+
+  try {
+    // Get followers (people who follow the user)
+    const followers = await prisma.follow.findMany({
+      where: {
+        followingId: userid
+      },
+      select: {
+        follower: {
+          select: {
+            id: true,
+            name: true,
+            specialisation_field_of_study: true,
+            organisation_name: true,
+            city: true
+          }
+        }
+      }
+    });
+
+    // Get following (people whom the user follows)
+    const following = await prisma.follow.findMany({
+      where: {
+        followerId: userid
+      },
+      select: {
+        following: {
+          select: {
+            id: true,
+            name: true,
+            specialisation_field_of_study: true,
+            organisation_name: true,
+            city: true
+          }
+        }
+      }
+    });
+
+    // Transform the data to flatten the structure
+    const formattedFollowers = followers.map(f => f.follower);
+    const formattedFollowing = following.map(f => f.following);
+
+    return c.json({
+      followers: formattedFollowers,
+      following: formattedFollowing,
+      followersCount: formattedFollowers.length,
+      followingCount: formattedFollowing.length
+    });
+
+  } catch (error) {
+    console.error(error);
+    return c.json({ message: "Error fetching network data" }, 500);
+  }
+});
+
 app.post("/verify-doctor", async (c) => {
   try {
     const body = await c.req.json();
-    const { registrationNo } = body;
-    const strRegNo = registrationNo.toString();
+    const { registrationNo, medicalCouncil, userId } = body;
+
+    const intUserId = parseInt(userId);
 
     const prisma = new PrismaClient({
       datasourceUrl: c.env.DATABASE_URL,
     }).$extends(withAccelerate());
 
-    const doctors = await prisma.doctors.findMany({
+    // Check if data exists in doctors table
+    const doctorRecord = await prisma.doctors.findFirst({
       where: {
         registrationNo: registrationNo,
       },
     });
 
-    if (doctors) {
-      return c.json({ doctors: doctors });
-    } else {
-      const response = await fetch(
-        "https://www.nmc.org.in/MCIRest/open/getDataFromService?service=searchDoctor",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36",
-          },
-          body: JSON.stringify({ registrationNo }),
-        }
+    if (doctorRecord) {
+      // Parse stored doctors data
+      const doctorsData = JSON.parse(doctorRecord.doctors);
+
+      // Check if registration matches medical council
+      const isValid = doctorsData.some(
+        (doctor: any) => doctor.smcName === medicalCouncil
       );
-      const data = await response.text();
 
-      
+      if (isValid) {
+        // Generate and set verification token
 
+        const response = await prisma.user.update({
+          where: { id: intUserId },
+          data: {
+            medical_counsel: medicalCouncil,
+            register_number: registrationNo,
+            verified: true,
+          },
+        });
 
+        if (response) {
+          const token = await sign(
+            {
+              registrationNo,
+              userId,
+              medicalCouncil,
+            },
+            c.env.JWT_SECRET
+          );
+
+          setCookie(c, "verifytoken", token, {
+            httpOnly: true,
+            maxAge: 34559999,
+            secure: true,
+            sameSite: "strict",
+            path: "/",
+          });
+        }
+
+        return c.json({ verified: true, data: doctorsData });
+      }
+
+      return c.json({ verified: false, data: doctorsData });
     }
+
+    // If no local data, fetch from NMC
+    const response = await fetch(
+      "https://www.nmc.org.in/MCIRest/open/getDataFromService?service=searchDoctor",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36",
+        },
+        body: JSON.stringify({ registrationNo }),
+      }
+    );
+
+    const data = await response.json();
+
+    // Store the response in doctors table regardless of validation
+    await prisma.doctors.create({
+      data: {
+        registrationNo: registrationNo,
+        doctors: JSON.stringify(data),
+      },
+    });
+
+    if (Array.isArray(data) && data.length > 0) {
+      // Check if registration matches medical council
+      const isValid = data.some(
+        (doctor: any) => doctor.smcName === medicalCouncil
+      );
+
+      if (isValid) {
+        const response = await prisma.user.update({
+          where: { id: intUserId },
+          data: {
+            medical_counsel: medicalCouncil,
+            register_number: registrationNo,
+            verified: true,
+          },
+        });
+
+        if (response) {
+          // Generate and set verification token
+          const token = await sign(
+            {
+              registrationNo,
+              userId,
+              medicalCouncil,
+            },
+            c.env.JWT_SECRET
+          );
+
+          setCookie(c, "verifytoken", token, {
+            httpOnly: true,
+            maxAge: 3600,
+            secure: true,
+            sameSite: "strict",
+            path: "/",
+          });
+        }
+
+        return c.json({ verified: true, data });
+      }
+
+      return c.json({ verified: false, data });
+    }
+
+    // Empty array or error response
+    return c.json({
+      verified: false,
+      message: "No doctor found with given registration number",
+      data,
+    });
   } catch (error) {
     console.error("Error:", error);
     return c.json({ message: "Error verifying doctor registration" }, 500);

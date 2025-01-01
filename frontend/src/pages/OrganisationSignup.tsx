@@ -83,6 +83,13 @@ function OrganisationSignup() {
   async function handleClick(e: any) {
     e.preventDefault();
 
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error("Please sign in first");
+      navigate('/auth/signup');
+      return;
+    }
+
     const finalData = {
       ...organisationDetails,
       organisationCountry,
@@ -92,7 +99,7 @@ function OrganisationSignup() {
 
     const result = organisationDetailsSchema.safeParse(finalData);
     if (!result.success) {
-      const firstError = result.error.errors[0]; // Only the first error
+      const firstError = result.error.errors[0];
       toast.error(`${firstError.path[0]}: ${firstError.message}`);
       return;
     }
@@ -100,38 +107,33 @@ function OrganisationSignup() {
     const loadingToast = toast.loading("loading");
 
     try {
-      if (email) {
-        const response = await axios.post(
-          `${BACKEND_URL}/signup/organisation`,
-          {
-            email: email,
-            organisation_name: organisationDetails.name,
-            country: organisationCountry,
-            city: organisationLocation,
-            organisation_type: selectedOption,
-            id: id,
-          }
-        );
-        toast.dismiss(loadingToast);
-        console.log(response);
-      } else {
-        const response = await axios.post(
-          `${BACKEND_URL}/signup/organisation`,
-          {
-            organisation_name: organisationDetails.name,
-            country: organisationCountry,
-            city: organisationLocation,
-            organisation_type: selectedOption,
-            id: id,
-          }
-        );
-        toast.dismiss(loadingToast);
-        console.log(response);
-      }
+      const response = await axios.post(
+        `${BACKEND_URL}/signup/organisation`,
+        {
+          email: email,
+          organisation_name: organisationDetails.name,
+          country: organisationCountry,
+          city: organisationLocation,
+          organisation_type: selectedOption,
+          id: id,
+        },
+        {withCredentials: true}
+      );
 
+      console.log(response);
+
+      toast.dismiss(loadingToast);
+      toast.success("Organisation Created Successfully");
       navigate("/");
     } catch (error: any) {
       toast.dismiss(loadingToast);
+      
+      if (error.response?.status === 401) {
+        toast.error("Please sign in again");
+        navigate('/auth/signup');
+        return;
+      }
+      
       if (error.response) {
         toast.error(`Error: ${error.response.data}`);
       } else if (error.request) {
@@ -139,7 +141,6 @@ function OrganisationSignup() {
       } else {
         toast.error(`Error: ${error.message}`);
       }
-      console.log(e);
     }
   }
 

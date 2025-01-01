@@ -51,8 +51,8 @@ export const router = createBrowserRouter([
   { path: "/signup/organisation/:id", element: <OrganisationSignup /> },
   { path: "/signup/student/:id", element: <StudentSignup /> },
   { path: "/join-now", element: <JoinNow /> },
-  { path: "/signin", element: <Login /> },
-  { path: "/signup", element: <SignUp /> },
+  { path: "/auth/signin", element: <Login /> },
+  { path: "/auth/signup", element: <SignUp /> },
   { path: "/verify-otp", element: <VerifyOTP /> },
   { path: "/profile/:id", element: <Profile /> },
   { path: "/questions", element: <Questions /> },
@@ -101,6 +101,6 @@ export const router = createBrowserRouter([
   { path: "/conferrences/:id", element: <Conferrences /> },
   {path : "/message", element : <Message/>},
   {path : "/notifications", element : <Notifications/>},
-  {path : "question-page", element : <QuestionPage/>},
+  {path : "question-page/:id", element : <QuestionPage/>},
   {path : "/phonesignup" , element : <PhoneSignup />}
 ]);

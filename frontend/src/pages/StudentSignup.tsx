@@ -19,9 +19,7 @@ function StudentSignup() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const userId = parseInt(localStorage.getItem("userId") || "");
-
-  const id = location.state || userId;
+  const id = location.state;
 
   const options = ["Mr", "Ms"];
 
@@ -75,6 +73,16 @@ function StudentSignup() {
     gender = "Female";
   }
 
+
+ 
+  function handleChange(e: any) {
+    setStudentDetails({ ...studentDetails, [e.target.name]: e.target.value });
+  }
+
+  function handleDropdownSelect(option: any) {
+    setSelectedOption(option);
+  }
+
   // zod schema
 
   const studentDetailsSchema = z.object({
@@ -91,6 +99,7 @@ function StudentSignup() {
     gender: z.string().min(3, { message: "Enter Valid Title" }),
   });
 
+
   const finalData = {
     ...studentDetails,
     studentCountry,
@@ -103,9 +112,16 @@ function StudentSignup() {
   async function handleClick(e: any) {
     e.preventDefault();
 
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Please sign in first");
+      navigate("/auth/signup");
+      return;
+    }
+
     const result = studentDetailsSchema.safeParse(finalData);
     if (!result.success) {
-      const firstError = result.error.errors[0]; // Only the first error
+      const firstError = result.error.errors[0];
       toast.error(`${firstError.path[0]}: ${firstError.message}`);
       return;
     }
@@ -113,26 +129,33 @@ function StudentSignup() {
     const loadingToast = toast.loading("Loading");
 
     try {
-      const response = await axios.post(`${BACKEND_URL}/signup/student`, {
-        name: studentDetails.fullname,
-        country: studentCountry,
-        city: studentLocation,
-        organisation_name: studentDetails.collegeName,
-        specialisation_field_of_study: selectedProgram,
-        department: selectedDepartment,
-        gender: gender,
-        id: id,
-      });
+      const response = await axios.post(
+        `${BACKEND_URL}/signup/student`,
+        {
+          name: studentDetails.fullname,
+          country: studentCountry,
+          city: studentLocation,
+          organisation_name: studentDetails.collegeName,
+          specialisation_field_of_study: selectedProgram,
+          department: selectedDepartment,
+          gender: gender,
+          id: id,
+        },
+        { withCredentials: true }
+      );
 
       console.log(response);
-
       toast.dismiss(loadingToast);
-
+      toast.success("Student Profile Created Successfully");
       navigate("/");
     } catch (error: any) {
       toast.dismiss(loadingToast);
 
-      console.log(error);
+      if (error.response?.status === 401) {
+        toast.error("Please sign in again");
+        navigate("/auth/signup");
+        return;
+      }
 
       if (error.response) {
         toast.error(`Error: ${error.response.data}`);
@@ -142,14 +165,6 @@ function StudentSignup() {
         toast.error(`Error: ${error.message}`);
       }
     }
-  }
-
-  function handleDropdownSelect(option: any) {
-    setSelectedOption(option);
-  }
-
-  function handleChange(e: any) {
-    setStudentDetails({ ...studentDetails, [e.target.name]: e.target.value });
   }
 
   return (

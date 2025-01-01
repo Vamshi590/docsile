@@ -26,7 +26,6 @@ function PublishPost() {
 
   const userId = localUserID || id;
 
-  const userDetails = JSON.parse(localStorage.getItem("User") || "");
 
   const navigate = useNavigate();
 
@@ -216,7 +215,7 @@ function PublishPost() {
               </div>
             </div>
 
-            <PostCard cardprofileimg = {profilepic} poster = {userDetails.name} posterdetails = {userDetails.headline} date = {"Just now"} posttitle = {title} postcontent = {description} postimg = {questionimg}/>
+            
 
 
 

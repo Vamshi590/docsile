@@ -8,6 +8,7 @@ import { GoArrowLeft } from "react-icons/go";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import { BACKEND_URL } from "@/config";
+import { toast, Toaster } from "sonner";
 
 const AskQuestion = () => {
   const [title, setTitle] = useState("");
@@ -30,6 +31,10 @@ const AskQuestion = () => {
   const userId = localUserID || id;
 
   const handleNext = () => {
+    if (!title.trim()) {
+      toast.error("Please enter a question title");
+      return;
+    }
     setShowSecondForm(false);
   };
 
@@ -69,26 +74,50 @@ const AskQuestion = () => {
   //backend
 
   async function handleSubmit() {
-    try {
-      const response = await axios.post(
-        `${BACKEND_URL}/ask-question/${userId}`,
-        {
-          title,
-          description,
-          referenceTags,
-        }
-      );
-
-      console.log(response);
-    } catch (e) {
-      console.log(e);
+    if (referenceTags.length === 0) {
+      toast.error("Please add at least one reference tag");
+      return;
     }
+
+    const promise = async () => {
+      try {
+        const response = await axios.post(
+          `${BACKEND_URL}/questions/ask-question/${userId}`,
+          {
+            title,
+            description,
+            referenceTags,
+            anonymous,
+            urgency: "high",
+          }
+        );
+
+        if (response.data) {
+          navigate('/questions');
+          return 'Question posted successfully!';
+        }
+      } catch (e: any) {
+        throw new Error(e.response?.data?.message || "Failed to post question");
+      }
+    };
+
+    toast.promise(promise(), {
+      loading: 'Posting your question...',
+      success: (data) => data,
+      error: (err) => err.message
+    });
   }
+
+  // Add this function to handle tag removal
+  const removeTag = (indexToRemove: number) => {
+    setReferenceTags(referenceTags.filter((_, index) => index !== indexToRemove));
+  };
 
   return (
     <div className="h-screen max-w-sm mx-auto p-2 bg-white rounded-lg shadow-md space-y-4 relative overflow-auto no-scrollbar">
       {/* Top Bar - Visibility, Anonymous Toggle, and Post */}
 
+      <Toaster/>
       <div
         className={`transition-transform h-screen duration-500 ease-in-out ${
           showSecondForm ? "translate-y-0" : "translate-y-0"
@@ -129,6 +158,11 @@ const AskQuestion = () => {
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Question title..."
                 className="w-full p-3 text-base border-none rounded-lg focus:outline-none focus:ring-1 focus:ring-main transition duration-300"
+                required
+                onInvalid={(e) => {
+                  e.preventDefault();
+                  toast.error("Please enter a question title");
+                }}
               />
             </div>
 
@@ -226,28 +260,37 @@ const AskQuestion = () => {
                 >
                   {referenceTags.length > 0 ? (
                     <div className="flex flex-wrap gap-2 px-2 pt-2">
-                      {referenceTags?.map((skill, index): any => (
+                      {referenceTags?.map((skill, index) => (
                         <span
                           key={index}
-                          className="px-3 py-1 text-black border border-second rounded-full"
+                          className="px-3 py-1 text-black border border-second rounded-full relative group"
                         >
                           {skill}
+                          <button
+                            onClick={() => removeTag(index)}
+                            className="absolute -top-1 -right-1 bg-white rounded-full w-4 h-4 flex items-center justify-center text-xs border border-second hover:bg-gray-600 hover:text-white hover:border-black"
+                          >
+                            ×
+                          </button>
                         </span>
                       ))}
                     </div>
                   ) : null}
 
-                  <div className="flex w-full max-w-sm min-w-[200px]  rounded-2xl  transition duration-300 ease   shadow-sm focus:shadow">
+                  <div className="flex w-full max-w-sm min-w-[200px] rounded-2xl transition duration-300 ease">
                     <input
-                      className="w-full bg-transparent  placeholder:text-slate-400 text-slate-700 text-sm focus:outline-none px-3 py-3"
-                      placeholder={"Enter Reference tags"}
-                      type={"text"}
+                      className="w-full bg-transparent placeholder:text-slate-400 text-slate-700 text-sm focus:outline-none px-3 py-3"
+                      placeholder="Enter Reference tags (required)"
+                      type="text"
                       onChange={handleInterestsChange}
                       value={interestText}
+                      required
                     />
 
                     <button
-                      className="justify-end px-2 text-base font-semibold"
+                      className={`justify-end px-2 text-base font-semibold ${
+                        referenceTags.length === 0 ? 'text-black' : ''
+                      }`}
                       onClick={handleInterests}
                     >
                       Add

@@ -14,7 +14,7 @@ function JoinNow() {
   }
 
   function handleSignIn() {
-    navigate("/signin");
+    navigate("/auth/signin");
   }
 
   return (

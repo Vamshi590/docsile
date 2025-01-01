@@ -12,13 +12,15 @@ function QuestionCard({
   question,
   questiondescription,
   commentimg,
+  id
 }: any) {
 
   const navigate = useNavigate();
 
 
+
   const handleQuestionClick = () => {
-    navigate('/question-page')
+    navigate(`/question-page/${id}`);
   }
 
 

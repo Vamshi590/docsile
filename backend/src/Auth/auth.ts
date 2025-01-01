@@ -1,38 +1,36 @@
-import { Hono } from "hono"
+import { Hono } from "hono";
 import { z } from "zod";
 import { withAccelerate } from "@prisma/extension-accelerate";
-import { sign, verify } from "hono/jwt";
+import { sign } from "hono/jwt";
 import { PrismaClient } from "@prisma/client/edge";
-import { setCookie } from "hono/cookie";
 import { cors } from "hono/cors";
-
-
-
-
+import { setCookie } from "hono/cookie";
 
 const auth = new Hono<{
-    Bindings: {
-      DATABASE_URL: string;
-      JWT_SECRET: string;
-    };
+  Bindings: {
+    DATABASE_URL: string;
+    JWT_SECRET: string;
+  };
 }>();
+
+
 
 auth.use('/*', cors({
   origin: 'http://localhost:5173',
   credentials: true,
-  allowMethods: ['POST', 'GET', 'OPTIONS', 'DELETE', 'PUT'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposeHeaders: ['Content-Length', 'X-Requested-With'],
-  maxAge: 600,
+  allowMethods: ['POST', 'GET', 'OPTIONS'],
+  allowHeaders: ['Content-Type']
 }));
 
 const signupSchema = z.object({
   email: z.string().email("Invalid email format"),
-  password: z.string().min(8, "Password must be at least 6 characters long"),
+  password: z.string().min(8, "Password must be at least 8 characters long"),
   category: z.enum(["doctor", "student", "organisation"], {
     errorMap: () => ({ message: "Invalid category" }),
   }),
 });
+
+
 
 
 
@@ -72,14 +70,23 @@ auth.post("/signup", async (c) => {
         payload: {
           id: user.id,
           email: user.email,
+          category: user.category,
         },
       },
       c.env.JWT_SECRET
     );
 
-  
+
+    setCookie(c, "auth", token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "strict",
+      maxAge: 60 * 60 * 24 * 7, // 1 week 
+    });
+    
 
     return c.json({
+      message: "User created successfully",
       token,
       id: user.id,
     });
@@ -87,12 +94,16 @@ auth.post("/signup", async (c) => {
     console.error(error);
 
     if (error.code === "P2002") {
-      c.status(409);
-      return c.json("A user with this email already exists");
+      return c.json(
+        { error: "A user with this email already exists" },
+        409
+      );
     }
 
-    c.status(500);
-    return c.json("Internal Server Error");
+    return c.json(
+      { error: "Internal Server Error" },
+      500
+    );
   }
 });
 
@@ -117,10 +128,20 @@ auth.post("/signin", async (c) => {
     });
 
     if (existinguser) {
-      const token = sign(
-        { id: existinguser.id, email: existinguser.email },
+      const token = await sign(
+        { id: existinguser.id, email: existinguser.email , category: existinguser.category },
         c.env.JWT_SECRET
       );
+
+      setCookie(c, "auth", token, {
+        httpOnly: true,
+        secure: false,
+        sameSite: "strict",
+        maxAge: 60 * 60 * 24 * 7, // 1 week
+      });
+
+
+
       return c.json({ exists: true, token });
     }
 
@@ -140,7 +161,4 @@ auth.post("/signin", async (c) => {
   }
 });
 
-
 export default auth;
-
-

@@ -53,6 +53,14 @@ function Login() {
     try {
       try {
         await signInWithEmailAndPassword(auth, values.email, values.password);
+        const response = await axios.post(`${BACKEND_URL}/auth/signin`, {
+          date: new Date().toISOString(),
+          email : values.email,
+        });
+
+
+        console.log(response.data);
+
         navigate("/");
       } catch (e: any) {
         toast.error(e.message || "something went wrong");
@@ -71,12 +79,7 @@ function Login() {
     }
   }
 
-
-
-
-
   const handleGoogleSignin = async () => {
-    
     try {
       const result = await signInWithGooglePopup();
       const user = result.user;
@@ -104,25 +107,15 @@ function Login() {
       }
     } catch (error: any) {
       if (error.response?.status === 409) {
-        toast.error("This email is already registered. Please sign in instead.");
+        toast.error(
+          "This email is already registered. Please sign in instead."
+        );
       } else {
         toast.error("Sign-in failed. Please try again.");
       }
       console.error("Error during Google sign-in:", error);
     }
-  }
-
-
-
-
-
-
-
-
-
-
-
-
+  };
 
   return (
     <div className="bg-slate-100 flex items-center justify-center h-screen">

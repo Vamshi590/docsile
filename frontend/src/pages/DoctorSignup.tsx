@@ -7,7 +7,6 @@ import Dropdown2 from "../components/Dropdown2";
 import background2 from "../assets/background2.svg";
 import { useState } from "react";
 import * as z from "zod";
-
 import axios from "axios";
 import { toast, Toaster } from "sonner";
 import { BACKEND_URL } from "../config";
@@ -21,11 +20,9 @@ function DoctorSignup() {
   const location = useLocation();
   const navigate = useNavigate();
 
- 
+  const id = location.state;
 
-  const id = location.state ;
-
-  console.log(id)
+  console.log(id);
 
   const options = ["Mr", "Ms"];
 
@@ -119,9 +116,10 @@ function DoctorSignup() {
   async function handleClick(e: any) {
     e.preventDefault();
 
+
     const result = doctorDetailsSchema.safeParse(finalData);
     if (!result.success) {
-      const firstError = result.error.errors[0]; // Only the first error
+      const firstError = result.error.errors[0];
       toast.error(`${firstError.path[0]}: ${firstError.message}`);
       return;
     }
@@ -129,15 +127,18 @@ function DoctorSignup() {
     const loadingToast = toast.loading("Loading");
 
     try {
-      const response = await axios.post(`${BACKEND_URL}/signup/doctor`, {
-        name: doctorDetails.fullname,
-        country: doctorCountry,
-        city: DoctorLocation,
-        organisation_name: doctorDetails.hospitalname,
-        specialisation_field_of_study: selectedSpecialization,
-        gender: gender,
-        id: id,
-      });
+      const response = await axios.post(
+        `${BACKEND_URL}/signup/doctor`,
+        {
+          name: doctorDetails.fullname,
+          country: doctorCountry,
+          city: DoctorLocation,
+          organisation_name: doctorDetails.hospitalname,
+          specialisation_field_of_study: selectedSpecialization,
+          gender: gender,
+          id: id,
+        }
+      );
 
       console.log(response);
 
@@ -148,6 +149,12 @@ function DoctorSignup() {
       navigate("/", { state: id });
     } catch (error: any) {
       toast.dismiss(loadingToast);
+
+      if (error.response?.status === 401) {
+        toast.error("Please sign in again");
+        navigate("/auth/signup");
+        return;
+      }
 
       if (error.response) {
         toast.error(`Error: ${error.response.data}`);
