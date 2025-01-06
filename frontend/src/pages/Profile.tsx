@@ -5,10 +5,10 @@ import {
   FaLinkedin,
   FaRegBell,
   FaTwitter,
+  FaPlus,
 } from "react-icons/fa";
 import { LuMenu } from "react-icons/lu";
 import ProfileCard from "../components/ProfileCard";
-import profilepic from "../assets/ProfilePic.svg";
 import topinterestsicon from "../assets/topinterestsicon.svg";
 import activityicon from "../assets/activityicon.svg";
 import certificationicon from "../assets/certificationsicon.svg";
@@ -39,38 +39,49 @@ import NoMemberships from "@/components/NoMemberships";
 import TopNavbar from "@/components/TopNavbar";
 import { MdArrowRightAlt } from "react-icons/md";
 import googleicon from "../assets/googleicon.svg";
-import appleicon from "../assets/appleicon.svg";
-import { motion } from "framer-motion";
 import testimg from "../assets/mahendhar fee.png";
+import ExperienceCard from "../components/ExperienceCard";
+import EducationTimeline from "../components/EducationTimeline";
+import { formatDate } from "@/utils/dateFormatter";
+import MembershipCarousel from "../components/MembershipCarousel";
+import CertificateGallery from "../components/CertificateGallery";
+import { checkVerification } from "@/utils/verificationCheck";
+import { Dialog } from "@/components/Dialog";
+import { toast, Toaster } from "sonner";
+import profilepic from "../assets/ProfilePic.svg";
 
 function Profile() {
   const [showNavbar, setShowNavbar] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
   const contentRef = useRef<HTMLDivElement | null>(null); // Ref for scrollable content
 
+
   const { id } = useParams(); // Get user ID from URL params
   const navigate = useNavigate();
 
   const [userDetails, setUserDetails] = useState<any>(null); // State to hold user data
 
+  // Add the verification dialog
+  const [showDialog, setShowDialog] = useState(false);
+
   function handleAddCertificates() {
-    navigate(`/add-certificate/${id}`);
+    checkVerification(id as string, "add-certificate", navigate, setShowDialog);
   }
 
   function handleAddAchievements() {
-    navigate(`/add-achievements/${id}`);
+    checkVerification(id as string, "add-achievements", navigate, setShowDialog);
   }
 
   function handleAddExperience() {
-    navigate(`/add-professional-experience/${id}`);
+    checkVerification(id as string, "add-professional-experience", navigate, setShowDialog);
   }
 
   function handleAddEducation() {
-    navigate(`/add-education/${id}`);
+    checkVerification(id as string, "add-education", navigate, setShowDialog);
   }
 
   function handleAddMemberships() {
-    navigate(`/add-memberships/${id}`);
+    checkVerification(id as string, "add-memberships", navigate, setShowDialog);
   }
 
   useEffect(() => {
@@ -96,47 +107,37 @@ function Profile() {
   const fetchUserData = async (userId: string, storedUserData: any = null) => {
     try {
       const response = await axios.get(`${BACKEND_URL}/profile/${userId}`);
-      const userInfo = response.data.user;
-      const questionInfo = response.data.questions;
-      const postsInfo = response.data.posts;
-      const certificatesInfo = response.data.certificates;
-      const awardsInfo = response.data.awards;
-      const experienceInfo = response.data.experiences;
-      const educationInfo = response.data.educations;
-      const membershipsInfo = response.data.memberships;
+      const userData = response.data.data; // New response structure
+
+      console.log(response.data)
 
       const fetchedUser = {
-        name: userInfo.name,
-        headline: `${userInfo.specialisation_field_of_study}`,
-        userLocation: `${userInfo.city}`,
-        workPlace: `${userInfo.organisation_name}`,
-        questionCount: questionInfo.length,
-        postsCount: postsInfo.length,
-        posts: postsInfo,
-        certificates: certificatesInfo,
-        awards: awardsInfo,
-        experiences: experienceInfo,
-        educations: educationInfo,
-        memberships: membershipsInfo,
+        name: userData.name,
+        headline: userData.department,
+        userLocation: userData.city,
+        workPlace: userData.organisation_name,
+        questionCount: userData.questions.length,
+        postsCount: userData.posts.length,
+        profile_picture: userData.profile_picture,
+        posts: userData.posts,
+        certificates: userData.certifications,
+        awards: userData.achievementsAwards,
+        experiences: userData.professionalExperience,
+        educations: userData.education,
+        memberships: userData.memberships,
       };
 
       if (storedUserData) {
-        // Compare fetched data with stored data
         if (JSON.stringify(fetchedUser) !== JSON.stringify(storedUserData)) {
-          console.log("Data has changed, updating localStorage and UI...");
-          localStorage.setItem("User", JSON.stringify(fetchedUser)); // Update localStorage
-          setUserDetails(fetchedUser); // Update UI with new data
-        } else {
-          console.log("No changes detected in the data.");
+          localStorage.setItem("User", JSON.stringify(fetchedUser));
+          setUserDetails(fetchedUser);
         }
       } else {
-        // If no stored data, set fetched data to localStorage and UI
-        console.log("Storing new data in localStorage...");
         localStorage.setItem("User", JSON.stringify(fetchedUser));
         setUserDetails(fetchedUser);
       }
-    } catch (err) {
-      console.log("Error fetching data:", err);
+    } catch (err: any) {
+      console.error("Error fetching data:", err.response?.data?.message || err);
     }
   };
 
@@ -172,11 +173,44 @@ function Profile() {
   const handleEducation = () => setValues(2);
   const handleAnalytics = () => setValues(3);
 
+  const handleProfilePicUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      // Get presigned URL from backend
+      const { data } = await axios.get(`${BACKEND_URL}/get-upload-url`);
+
+      // Upload to S3 without credentials
+      await axios.put(data.uploadURL, file, {
+        headers: { 
+          "Content-Type": file.type 
+        },
+        withCredentials: false
+      });
+
+      // Save image URL to database
+      await axios.post(`${BACKEND_URL}/update-profile-picture`, {
+        userId: id,
+        imageUrl: data.imageURL
+      });
+
+      
+
+      toast.success("Profile picture uploaded successfully");
+      // Optionally refresh the page or update the UI
+      window.location.reload();
+    } catch (error) {
+      toast.error("Failed to upload profile picture");
+      console.error(error);
+    }
+  };
+
   if (!userDetails) {
     return <p>Loading...</p>; // Loading state while fetching user data
   }
 
-  const handleScroll = (id : any) => {
+  const handleScroll = (id: any) => {
     const targetElement = document.getElementById(id);
     if (targetElement) {
       targetElement.scrollIntoView({ behavior: "smooth" });
@@ -189,6 +223,8 @@ function Profile() {
         <TopNavbar />
       </div>
 
+      <Toaster/>
+
       <div className="container mx-auto flex flex-col md:flex-row md:pt-16 px-4 lg:gap-12 max-w-7xl bg-white ">
         <div className="hidden md:block md:w-[25%] sticky top-10">
           <div className="flex justify-center  bg-gray-100 ">
@@ -196,18 +232,28 @@ function Profile() {
               {/* Profile Image with shadow */}
               <div className="relative w-32 h-32 mx-auto rounded-full overflow-hidden shadow-lg">
                 <img
-                  src={profilepic}
+                  src={userDetails.profile_picture || profilepic}
                   alt="Profile"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover "
                 />
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white opacity-20 rounded-full" />
+                
+                <label className="absolute bottom-0 right-0 p-2 bg-main rounded-full cursor-pointer hover:bg-opacity-90 transition-all">
+                  <input 
+                    type="file" 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={handleProfilePicUpload}
+                  />
+                  <FaPlus className="w-4 h-4 text-white" />
+                </label>
               </div>
 
               {/* Name and Title */}
-              <h2 className="mt-4 text-3xl font-bold text-main">Ch Srilatha</h2>
-              <p className="text-gray-700 font-medium">Opthalmology</p>
-              <p className="text-sm text-gray-500">Sri harsha eye hospital</p>
-              <p className="text-sm text-gray-500">Karimnagar, Telangana</p>
+              <h2 className="mt-4 text-3xl font-bold text-main">{capitalizeFirstLetter(userDetails.name)}</h2>
+              <p className="text-gray-700 font-medium">{capitalizeFirstLetter(userDetails.headline)}</p>
+              <p className="text-sm text-gray-500">{capitalizeFirstLetter(userDetails.workPlace)}</p>
+              <p className="text-sm text-gray-500">{capitalizeFirstLetter(userDetails.userLocation)}</p>
 
               {/* Social Icons */}
               <div className="flex items-center justify-center space-x-3 mt-6">
@@ -256,14 +302,14 @@ function Profile() {
 
             <button
               className="text-gray-700 flex flex-row px-6  py-2 rounded-l-md w-full font-medium  items-center hover:border-r-2 hover:border-r-main hover:bg-slate-100"
-              onClick={() => handleScroll("educations")}            
+              onClick={() => handleScroll("educations")}
             >
               Education
             </button>
 
             <button
               className="text-gray-700 flex flex-row px-6  py-2 rounded-l-md w-full font-medium  items-center hover:border-r-2 hover:border-r-main hover:bg-slate-100"
-              onClick={() => handleScroll("memberships")}            
+              onClick={() => handleScroll("memberships")}
             >
               Memberships
             </button>
@@ -321,270 +367,118 @@ function Profile() {
               {/* Experiences  */}
 
               <div id="experiences" className="mt-20">
-
-              <div  className="flex flex-col">
-                <p className="text-2xl font-bold text-main w-[90%]">
-                  Experiences
-                </p>
-
-                <div className="flex flex-row gap-8 mt-12 mb-4 ">
-                  <div className="  border p-4 border-main cursor-pointer rounded-3xl flex flex-col text-center items-center  w-1/4 shadow-lg hover:shadow-2xl">
-                    <div className="transition duration-300 ease-in-out transform hover:-translate-y-1 rounded-full w-24 h-24 flex flex-row justify-center items-center">
-                      <img src={googleicon} alt="job image" />
-                    </div>
-
-                    <div className="flex flex-col justify-center items-center">
-                      <p className="text-lg font-bold text-main">
-                        Cardiologist
-                      </p>
-
-                      <p className="text-base text-gray-600">
-                        Gandhi medical college
-                      </p>
-
-                      <p className="text-sm text-gray-600">
-                        Jan 2021 - Present
-                      </p>
-                    </div>
+                <div className="flex flex-col">
+                  <div className="flex justify-between items-center w-[90%]">
+                    <p className="text-2xl font-bold text-main">Experiences</p>
+                    <button 
+                      onClick={handleAddExperience}
+                      className="bg-main text-white px-4 py-2 rounded-full hover:bg-opacity-90"
+                    >
+                      + Add Experience
+                    </button>
                   </div>
 
-                  <div className=" border p-4 border-main cursor-pointer rounded-3xl flex flex-col text-center items-center justify-between w-1/4 shadow-lg hover:shadow-2xl">
-                    <div className=" transition duration-300 ease-in-out transform hover:-translate-y-2 rounded-full w-24 h-24 flex flex-row justify-center items-center">
-                      <img src={appleicon} alt="job image" />
-                    </div>
-
-                    <div className="flex flex-col justify-center items-center">
-                      <p className="text-lg font-bold text-main">
-                        Opthalmology
-                      </p>
-
-                      <p className="text-base text-gray-600">
-                        Chalmeda medical college
-                      </p>
-
-                      <p className="text-sm text-gray-600">
-                        Jan 2019 - jan 2021
-                      </p>
-                    </div>
+                  <div className="flex flex-row gap-8 mt-12 mb-4">
+                    {userDetails?.experiences?.length > 0 ? (
+                      userDetails.experiences.map((exp: any) => (
+                        <ExperienceCard
+                          key={exp.id}
+                          icon={exp.icon || googleicon}
+                          title={capitalizeFirstLetter(exp.title)}
+                          organization={capitalizeFirstLetter(exp.organisation)}
+                          duration = {`${formatDate(exp.startDate)} - ${exp.endDate ? formatDate(exp.endDate) : 'Present'}`}
+                        />
+                      ))
+                    ) : (
+                      <div className="w-full flex flex-col items-center justify-center py-12 bg-white rounded-lg">
+                        <p className="text-gray-600 text-lg mb-4">No experiences added yet</p>
+                        <button 
+                          onClick={handleAddExperience}
+                          className="flex items-center gap-2 text-main hover:underline"
+                        >
+                          Add your first experience
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-              </div>
-
 
               {/* educations */}
 
               <div id="educations" className="flex flex-col mt-20">
-                <h2 className="text-2xl font-bold text-main w-[90%] ">
-                  Education
-                </h2>
+                <div className="flex justify-between items-center w-[90%]">
+                  <h2 className="text-2xl font-bold text-main">Education</h2>
+                  <button 
+                    onClick={() => navigate(`/add-education/${id}`)}
+                    className="bg-main text-white px-4 py-2 rounded-full hover:bg-opacity-90"
+                  >
+                    + Add Education
+                  </button>
+                </div>
 
                 <div className="flex flex-row items-start md:items-center mt-12">
-                  {/* Left Section with Icons */}
-                  <div className="flex flex-col items-center space-y-20 ">
-                    {/* <div className="bg-white p-4 shadow-lg hover:shadow-2xl rounded-lg border-l-4 border-main">
-                      <div className="flex flex-row space-x-6 ">
-                        <div className="h-full items-center justify-center">
-                          <div className="rounded-full w-12 h-12 flex flex-col justify-center ">
-                            <img src={googleicon} alt="google icon" />
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col  w-full ">
-                          <p className="text-lg font-semibold text-main">
-                            Gandhi medical college
-                          </p>
-
-                          <p className="text-gray-600">MBBS | Cardiology</p>
-
-                          <p className="text-sm text-gray-600">2021 - 2025</p>
-                        </div>
-                      </div>
-                    </div> */}
-                    <ol className="items-center sm:flex flex-row">
-                      <li className="relative mb-6 sm:mb-0 sm:pb-8 sm:pl-8">
-                        <div className="flex items-center">
-                          <div className="z-10 flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
-                            <div className="flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full">
-                              <div className="rounded w-12 h-12 flex items-center justify-center">
-                                <img src={appleicon} alt="apple icon" />
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex-grow w-full bg-gray-200 h-0.5"></div>
-                        </div>
-                        <div className="mt-3 sm:pe-8">
-                          <h3 className="text-lg font-semibold text-main">
-                            Gandhi medical college
-                          </h3>
-                          <time className="block mb-2 text-sm font-normal leading-none text-gray-400">
-                            Jan 2021 - May 2025
-                          </time>
-                        </div>
-                      </li>
-                      <li className="relative mb-6 sm:mb-0 sm:pb-8 sm:pl-8">
-                        <div className="flex items-center">
-                          <div className="z-10 flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
-                            <div className="flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full">
-                              <div className="rounded-full w-12 h-12 flex justify-center items-center">
-                                <img src={googleicon} alt="google icon" />
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex-grow w-full bg-gray-200 h-0.5 dark:bg-gray-700"></div>
-                        </div>
-                        <div className="mt-3 sm:pe-8">
-                          <h3 className="text-lg font-semibold text-main dark:text-white">
-                            Paramitha high school
-                          </h3>
-                          <time className="block mb-2 text-sm font-normal leading-none text-gray-400 dark:text-gray-500">
-                            March 2018 - April 2020
-                          </time>
-                        </div>
-                      </li>
-                    </ol>
-                  </div>
-
-                  {/* Right Section with Text */}
+                  <EducationTimeline
+                    educations={userDetails?.educations?.map((edu: any) => ({
+                      id: edu.id,
+                      icon: edu.icon,
+                      schoolName: capitalizeFirstLetter(edu.schoolName),
+                      degree : `${capitalizeFirstLetter(edu.degree)} | ${capitalizeFirstLetter(edu.department)}`,
+                      duration: `${formatDate(edu.startDate)} - ${edu.endDate ? formatDate(edu.endDate) : 'Present'}`
+                    })) || []}
+                    onAddClick={() => navigate(`/add-education/${id}`)}
+                  />
                 </div>
               </div>
 
               {/* Memberships */}
 
               <div id="memberships" className="flex flex-col mt-20">
-                <p className="text-main text-2xl font-bold">Memberships</p>
-
-                <div className="container mx-auto mt-12">
-                  <motion.div
-                    initial={{ x: 0 }}
-                    animate={{ x: "-100%" }}
-                    transition={{
-                      duration: 30,
-                      repeat: Infinity,
-                      ease: "linear",
-                    }}
-                    className="flex flex-shrink-0 gap-16"
+                <div className="flex justify-between items-center w-[90%]">
+                  <p className="text-main text-2xl font-bold">Memberships</p>
+                  <button 
+                    onClick={() => navigate(`/add-memberships/${id}`)}
+                    className="bg-main text-white px-4 py-2 rounded-full hover:bg-opacity-90"
                   >
-                    <div className="flex flex-col border border-main items-center rounded-3xl px-2 py-4 w-1/4 shadow-md hover:shadow-2xl cursor-default">
-                      <div className="rounded-full w-12 h-12">
-                        <img
-                          className="rounded-full transform duration-300 ease-in-out transition hover:-translate-y-2"
-                          src={googleicon}
-                          alt="google icon"
-                        />
-                      </div>
-
-                      <div className="flex flex-col items-center justify-center text-center">
-                        <p className="text-main text-lg font-semibold">
-                          Telangana opthalmology society
-                        </p>
-                        <p className="text-gray-600 text-sm">Member</p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col border border-main items-center rounded-3xl px-2 py-4 w-1/4 shadow-md hover:shadow-2xl cursor-default">
-                      <div className="rounded-full w-12 h-12">
-                        <img
-                          className="rounded-full transform duration-300 ease-in-out transition hover:-translate-y-2"
-                          src={googleicon}
-                          alt="google icon"
-                        />
-                      </div>
-
-                      <div className="flex flex-col items-center justify-center text-center">
-                        <p className="text-main text-lg font-semibold">
-                          Telangana opthalmology society
-                        </p>
-                        <p className="text-gray-600 text-sm">Member</p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col border border-main items-center rounded-3xl px-2 py-4 w-1/4 shadow-md hover:shadow-2xl cursor-default">
-                      <div className="rounded-full w-12 h-12">
-                        <img
-                          className="rounded-full transform duration-300 ease-in-out transition hover:-translate-y-2"
-                          src={googleicon}
-                          alt="google icon"
-                        />
-                      </div>
-
-                      <div className="flex flex-col items-center justify-center text-center">
-                        <p className="text-main text-lg font-semibold">
-                          Telangana opthalmology society
-                        </p>
-                        <p className="text-gray-600 text-sm">Member</p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col border border-main items-center rounded-3xl px-2 py-4 w-1/4 shadow-md hover:shadow-2xl cursor-default">
-                      <div className="rounded-full w-12 h-12">
-                        <img
-                          className="rounded-full transform duration-300 ease-in-out transition hover:-translate-y-2"
-                          src={googleicon}
-                          alt="google icon"
-                        />
-                      </div>
-
-                      <div className="flex flex-col items-center justify-center text-center">
-                        <p className="text-main text-lg font-semibold">
-                          Telangana opthalmology society
-                        </p>
-                        <p className="text-gray-600 text-sm">Member</p>
-                      </div>
-                    </div>
-                  </motion.div>
+                    + Add Membership
+                  </button>
                 </div>
+
+                <MembershipCarousel
+                  memberships={userDetails?.memberships?.map((membership: any) => ({
+                    id: membership.id,
+                    icon: membership.icon || googleicon,
+                    societyName: membership.societyname || 'Society Name',
+                    position: membership.position || 'Member'
+                  })) || []}
+                  onAddClick={() => navigate(`/add-memberships/${id}`)}
+                />
               </div>
 
               {/* certifications */}
 
               <div id="certifications" className="flex flex-col mt-20 w-full">
-                <p className="text-main font-bold text-2xl">Certifications</p>
-
-                <div className="flex flex-row justify-between w-full mt-12">
-                  <div className="flex flex-col justify-center items-center w-1/2">
-                    <div className="w-2/3">
-                      <p className="text-main text-2xl font-bold">
-                        DR. Chathurvedhi gandhi Certificate
-                      </p>
-                      <p className="text-gray-600">Gandhi medical college</p>
-                    </div>
-                  </div>
-
-                  <div className="w-1/2">
-                    <div className="flex items-center justify-center">
-                      <img
-                        className=" transform duration-200 ease-in-out transition  hover:translate-y-8 hover:shadow-xl object-contain h-72 cursor-pointer"
-                        src={testimg}
-                        alt=""
-                      />
-                    </div>
-                  </div>
+                <div className="flex justify-between items-center w-[90%]">
+                  <p className="text-main font-bold text-2xl">Certifications</p>
+                  <button 
+                    onClick={() => navigate(`/add-certificate/${id}`)}
+                    className="bg-main text-white px-4 py-2 rounded-full hover:bg-opacity-90"
+                  >
+                    + Add Certificate
+                  </button>
                 </div>
+
+                <CertificateGallery
+                  certificates={userDetails?.certificates?.map((cert: any) => ({
+                    id: cert.id,
+                    title: capitalizeFirstLetter(cert.certificateName),
+                    organization: capitalizeFirstLetter(cert.issuingOrganisation),
+                    image: cert.certificateMediaLink || testimg
+                  })) || []}
+                  onAddClick={() => navigate(`/add-certificate/${id}`)}
+                />
               </div>
 
-              <div className="flex flex-row justify-between w-full mt-12">
-                <div className="w-1/2">
-                  <div className="flex items-center justify-center">
-                    <img
-                      className="transform duration-200 ease-in-out transition hover:translate-y-3 hover:shadow-xl object-contain h-72 cursor-pointer"
-                      src={testimg}
-                      alt=""
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-col justify-center items-center w-1/2">
-                  <div className="w-2/3">
-                    <p className="text-main text-2xl font-bold">
-                      DR. Chathurvedhi gandhi Certificate
-                    </p>
-                    <p className="text-gray-600">Gandhi medical college</p>
-                  </div>
-                </div>
-              </div>
-
-          
             </div>
           </div>
         </div>
@@ -940,6 +834,19 @@ function Profile() {
           </div>
         </div>
       </div>
+
+      <Dialog isOpen={showDialog} onClose={() => setShowDialog(false)}>
+        <div className="p-6">
+          <h2 className="text-xl font-semibold mb-4">Verification Required</h2>
+          <p className="mb-4">Please verify your medical registration to continue.</p>
+          <button 
+            onClick={() => navigate('/verification')} 
+            className="bg-main text-white px-4 py-2 rounded-full"
+          >
+            Verify Now
+          </button>
+        </div>
+      </Dialog>
     </div>
   );
 }

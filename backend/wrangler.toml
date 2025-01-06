@@ -6,6 +6,11 @@ compatibility_flags = [ "nodejs_compat" ]
 [vars]
 DATABASE_URL="prisma://accelerate.prisma-data.net/?api_key=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcGlfa2V5IjoiZDJlMTIyNWYtYWYzNS00MTAxLWI4OGEtM2I4ZjE4NDMyNTI2IiwidGVuYW50X2lkIjoiMGUwYmU0MGNiNTQyNGIzZmUzMjliZWY4MmMyNjMxODQ2YmEzYzNjNmJhNGRhZDVhNTY3Y2E5OWVmZjEyYzNjYSIsImludGVybmFsX3NlY3JldCI6ImU1NTY4ZGU2LWQyMzgtNDQxOS1hZGYyLTliNDBhZjVlNWVkZCJ9.WVDgCUf6D1EfIyQrfNyaOHmIgWTrrcMEx9JzPR6Tq1g"
 JWT_SECRET = "vamshisecret"
+REDIS_URL = "https://novel-guinea-24029.upstash.io"
+REDIS_TOKEN = "AV3dAAIjcDE4MTg3MGUyNmM5ZjY0NDc4YTJiYTBmMTE4M2U2YjAyZnAxMA"
+
+AWS_ACCESS_KEY = "AKIAZKDIC567JZYYLLGV"
+AWS_SECRET = "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"
 # MY_VAR = "my-variable"
 
 # [[kv_namespaces]]

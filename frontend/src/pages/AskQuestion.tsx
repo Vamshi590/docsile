@@ -79,9 +79,46 @@ const AskQuestion = () => {
       return;
     }
 
+    if (photos.length > 6) {
+      toast.error("Maximum 6 images allowed");
+      return;
+    }
+
     const promise = async () => {
       try {
-        const response = await axios.post(
+        let imageURLs = [];
+
+        // If there are photos, upload to S3 first
+        if (photos.length > 0) {
+          // Get presigned URLs for all photos
+          const { data } = await axios.post(`${BACKEND_URL}/get-upload-urls`, {
+            fileCount: photos.length,
+            fileTypes: photos.map(photo => photo.type),
+            id : userId,
+            type : "questions"
+          });
+
+          // Upload all photos in parallel
+          const uploadPromises = photos.map(async (photo, index) => {
+            const uploadResponse = await axios.put(data.urls[index].uploadURL, photo, {
+              headers: {
+                'Content-Type': photo.type
+              },
+              withCredentials: false
+            });
+
+            if (uploadResponse.status !== 200) {
+              throw new Error('Failed to upload photo');
+            }
+
+            return data.urls[index].imageURL;
+          });
+
+          imageURLs = await Promise.all(uploadPromises);
+        }
+
+        // Post question with image URLs if they exist
+        const { data: questionData } = await axios.post(
           `${BACKEND_URL}/questions/ask-question/${userId}`,
           {
             title,
@@ -89,13 +126,12 @@ const AskQuestion = () => {
             referenceTags,
             anonymous,
             urgency: "high",
+            imageUrls: imageURLs // Changed to array of URLs
           }
         );
 
-        if (response.data) {
-          navigate('/questions');
-          return 'Question posted successfully!';
-        }
+        navigate('/questions');
+        return 'Question posted successfully!';
       } catch (e: any) {
         throw new Error(e.response?.data?.message || "Failed to post question");
       }

@@ -1,7 +1,8 @@
 // Utility function to capitalize the first letter
-export function capitalizeFirstLetter(str: string) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-  }
+export function capitalizeFirstLetter(string: string | null | undefined): string {
+  if (!string) return ''; // Return empty string if input is null or undefined
+  return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
+}
 
 export function truncateString(str : string, maxLength : number) {
     if (str.length > maxLength) {

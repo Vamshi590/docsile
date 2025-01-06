@@ -9,6 +9,7 @@ import { AiOutlineFilePdf } from "react-icons/ai";
 import axios from "axios";
 import { BACKEND_URL } from "@/config";
 import { GoArrowLeft } from "react-icons/go";
+import { toast } from "sonner";
 
 interface InputProps {
   label: string;
@@ -110,23 +111,54 @@ const Certifications: React.FC = () => {
   //backend
 
   async function handleSubmit() {
-    try {
-      const response = await axios.post(
-        `${BACKEND_URL}/add-certificate/${id}`,
-        {
+
+    const promise = async () => {
+      try{
+        let imageURL = null;
+        if(file){
+          const {data : uploadData} = await axios.get(`${BACKEND_URL}/get-upload-url`);
+
+          const uploadResponse = await axios.put(uploadData.uploadURL, file, {
+            headers: {
+              "Content-Type": file.type,
+            },
+            withCredentials: false,
+          })
+
+          if(uploadResponse.status !== 200){
+            throw new Error("Failed to upload file");
+          }
+
+          imageURL = uploadData.imageURL;
+
+          const {data : certificateData} = await axios.post(`${BACKEND_URL}/add-certificate/${id}`, {
           certificateName : formData.certificationName,
           issuingOrganisation : formData.issuingOrganization,
           issueDate : formData.issueDate,
           certificateURL : formData.urlToCredential,
-          descreption : formData.description
-        }
-      );
+          descreption : formData.description,
+          imageUrl : imageURL
+          })
+          console.log(certificateData);
 
-      console.log(response);
-      navigate("/");
-    } catch (e) {
-      console.log(e);
+          navigate(`/profile/${id}`); ;
+          return 'certificate added';
+
+        }
+      }catch(e : any){
+        throw new Error(e.response?.data?.message || "Failed to add certificate");
+
+      }
     }
+
+    toast.promise(promise(), {
+      loading : "Adding certificate...",
+      success : (data) => data,
+      error : (err) => err.message
+    })
+
+
+
   }
 
   return (

@@ -2,18 +2,25 @@ import { GoArrowLeft } from "react-icons/go";
 import Search from "../components/Search";
 import cardprofileimg from "../assets/cardprofileimg.svg";
 import QuestionCard from "../components/QuestionCard";
-import logo from "../assets/logo.png";
 import profilepic from "../assets/ProfilePic.svg";
 import BottomNavbar from "../components/BottomNavbar";
 import { useEffect, useRef, useState } from "react";
 import TopNavbar from "@/components/TopNavbar";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import { HiOutlineLocationMarker } from "react-icons/hi";
-import { capitalizeFirstLetter, truncateString } from "@/functions";
 import axios from "axios";
 import { BACKEND_URL } from "@/config";
+import { toast, Toaster } from "sonner";
+import PulseQuestionCard from "@/components/PulseQuestionCard";
 
 
+
+interface PulseQuestion {
+  profileImage: string;
+  name: string;
+  postedAt: string;
+  question: string;
+}
 
 function Questions() {
   // const [showHeader, setShowHeader] = useState(true);
@@ -59,11 +66,15 @@ function Questions() {
 
   useEffect(() => {
     async function getQuestion() {
+      const loading =  toast.loading("Loading Questions...");
       try {
         const response = await axios.get(
           `${BACKEND_URL}/questions/${userid}`
         );
         setQuestion(response.data);
+
+        toast.dismiss(loading);
+
         
       } catch (e) {
         console.log(e);
@@ -78,11 +89,24 @@ function Questions() {
 
   }
 
+  // Filter high urgency questions for pulse section
+  const pulseQuestions = question?.data
+    ?.filter((q: any) => q.urgency === "HIGH")
+    ?.map((q: any) => ({
+      profileImage: q.User.profileImage || profilepic,
+      name: q.User.name,
+      postedAt: new Date(q.asked_at).toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric' 
+      }),
+      question: q.question
+    })) || [];
 
   return (
     <div className="bg-slate-100 min-h-screen flex flex-col">
       <TopNavbar />
 
+      <Toaster/>
       <div className="container mx-auto flex flex-col pt-4 lg:pt-20 px-4 gap-3 max-w-7xl">
         <div className="hidden lg:flex flex-col gap-3">
           <div className="flex flex-row px-2 py-3.5 bg-white rounded-3xl shadow-lg">
@@ -170,6 +194,7 @@ function Questions() {
                     month: 'short', 
                     day: 'numeric' 
                   })}
+                  questionimg = {q.question_image_links}
                   question={q.question}
                   questiondescription={q.question_description}
                   commentimg={cardprofileimg}
@@ -190,83 +215,15 @@ function Questions() {
                   Pulse Questions :{" "}
                 </p>
 
-                <div className="flex items-center p-2   cursor-pointer bg-white overflow-hidden ">
-                  <img
-                    src={profilepic}
-                    alt={`${name}'s profile`}
-                    className="w-11 h-11 rounded-full mr-2"
+                {pulseQuestions.map((q: PulseQuestion, index: number) => (
+                  <PulseQuestionCard
+                    key={index}
+                    profileImage={q.profileImage}
+                    name={q.name}
+                    postedAt={q.postedAt}
+                    question={q.question}
                   />
-                  <div className="flex-1 text-left ">
-                    <div className="flex flex-row items-center gap-2">
-                      <p className="font-semibold text-xs text-gray-800">
-                        {capitalizeFirstLetter("Vamshidhar")}
-                      </p>
-
-                      <p className="text-gray-500 text-[0.6rem] ">
-                        Posted 2d ago
-                      </p>
-                    </div>
-
-                    <p className="text-[0.7rem] text-gray-800 ">
-                      {truncateString(
-                        "What are the main reasons for obesity in this era of junk food and social media and everything",
-                        70
-                      )}
-                    </p>
-                  </div>{" "}
-                </div>
-
-                <div className="flex items-center p-2   cursor-pointer bg-white overflow-hidden ">
-                  <img
-                    src={profilepic}
-                    alt={`${name}'s profile`}
-                    className="w-11 h-11 rounded-full mr-2"
-                  />
-                  <div className="flex-1 text-left ">
-                    <div className="flex flex-row items-center gap-2">
-                      <p className="font-semibold text-xs text-gray-800">
-                        {capitalizeFirstLetter("Vamshidhar")}
-                      </p>
-
-                      <p className="text-gray-500 text-[0.6rem] ">
-                        Posted 2d ago
-                      </p>
-                    </div>
-
-                    <p className="text-[0.7rem] text-gray-800 ">
-                      {truncateString(
-                        "What are the main reasons for obesity in this era of junk food and social media and everything",
-                        70
-                      )}
-                    </p>
-                  </div>{" "}
-                </div>
-
-                <div className="flex items-center p-2   cursor-pointer bg-white overflow-hidden ">
-                  <img
-                    src={profilepic}
-                    alt={`${name}'s profile`}
-                    className="w-11 h-11 rounded-full mr-2"
-                  />
-                  <div className="flex-1 text-left ">
-                    <div className="flex flex-row items-center gap-2">
-                      <p className="font-semibold text-xs text-gray-800">
-                        {capitalizeFirstLetter("Vamshidhar")}
-                      </p>
-
-                      <p className="text-gray-500 text-[0.6rem] ">
-                        Posted 2d ago
-                      </p>
-                    </div>
-
-                    <p className="text-[0.7rem] text-gray-800 ">
-                      {truncateString(
-                        "What are the main reasons for obesity in this era of junk food and social media and everything",
-                        70
-                      )}
-                    </p>
-                  </div>{" "}
-                </div>
+                ))}
 
                 
               </div>

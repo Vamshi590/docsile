@@ -31,6 +31,7 @@ model User {
   created_at                    DateTime                 @default(now())
   last_logged_in                DateTime?
   medical_counsel               String?
+  profile_picture               String?
   skills                        Skills[]
   posts                         Posts[]
   questions                     Questions[]
@@ -43,6 +44,7 @@ model User {
   achievementsAwards            AchievementsAwards[]
    following    Follow[] @relation("following")
   followers    Follow[] @relation("followers")
+  questionViews QuestionViews[]
 }
 
 model Follow {
@@ -183,6 +185,7 @@ model Questions {
   answers              Answers[]
   questionComments     QuestionComments[]
   questionReferences   QuestionReferences[]
+  views               QuestionViews[]
 }
 
 model QuestionReferences {
@@ -220,6 +223,7 @@ model QuestionImageLinks {
   id          Int        @id @default(autoincrement())
   Questions   Questions? @relation(fields: [questionsId], references: [id])
   questionsId Int?
+  question_image_link String?
 }
 
 model Insightful {
@@ -282,4 +286,17 @@ model ProfessionalExperience {
   startDate String?
   endDate String?
   location String?
+}
+
+model QuestionViews {
+  id           Int       @id @default(autoincrement())
+  question     Questions @relation(fields: [questionId], references: [id])
+  questionId   Int
+  viewer       User      @relation(fields: [viewerId], references: [id])
+  viewerId     Int
+  viewDuration Int       @default(2)
+  sessionId    String    @default(uuid())
+  viewedAt     DateTime  @default(now())
+
+  @@unique([questionId, viewerId, sessionId])
 }

@@ -8,8 +8,8 @@ import { GoArrowLeft } from "react-icons/go";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import { BACKEND_URL } from "@/config";
-import PostCard from "@/components/PostCard";
-import questionimg from "../assets/questionimg.svg"
+import { toast } from "sonner";
+
 
 function PublishPost() {
   const [title, setTitle] = useState("");
@@ -60,21 +60,61 @@ function PublishPost() {
   //backend
 
   async function handleSubmit() {
-    try {
-      const response = await axios.post(
-        `${BACKEND_URL}/publish-post/${userId}`,
-        {
+    if (photos.length > 6) {
+      toast.error("Maximum 6 images allowed");
+      return;
+    }
+
+    const promise = async () => {
+      try {
+        let imageURLs = [];
+
+        if (photos.length > 0) {
+          // Get presigned URLs for all photos
+          const { data } = await axios.post(`${BACKEND_URL}/get-upload-urls`, {
+            fileCount: photos.length,
+            fileTypes: photos.map(photo => photo.type),
+            id: userId,
+            type : "posts"
+          });
+
+          // Upload all photos in parallel
+          const uploadPromises = photos.map(async (photo, index) => {
+            const uploadResponse = await axios.put(data.urls[index].uploadURL, photo, {
+              headers: {
+                'Content-Type': photo.type
+              },
+              withCredentials: false
+            });
+
+            if (uploadResponse.status !== 200) {
+              throw new Error('Failed to upload photo');
+            }
+
+            return data.urls[index].imageURL;
+          });
+
+          imageURLs = await Promise.all(uploadPromises);
+        }
+
+        const { data: postData } = await axios.post(`${BACKEND_URL}/publish-post/${userId}`, {
           title,
           description,
-        
-        }
-      );
+          imageUrls: imageURLs,
+        });
 
-      console.log(response);
-      navigate('/')
-    } catch (e) {
-      console.log(e);
-    }
+        navigate('/');
+        return 'Post published successfully';
+      } catch (e: any) {
+        throw new Error(e.response?.data?.message || "Failed to publish post");
+      }
+    };
+
+    toast.promise(promise(), {
+      loading: 'Publishing post...',
+      success: (data) => data,
+      error: (err) => err.message
+    });
   }
 
   return (

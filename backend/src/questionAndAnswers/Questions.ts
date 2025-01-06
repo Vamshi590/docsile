@@ -11,9 +11,7 @@ const questions = new Hono<{
 
 questions.post("/ask-question/:id", async (c) => {
   const body = await c.req.json();
-
   const params = c.req.param();
-
   const userid = parseInt(params.id);
 
   const prisma = new PrismaClient({
@@ -21,25 +19,45 @@ questions.post("/ask-question/:id", async (c) => {
   }).$extends(withAccelerate());
 
   try {
-    const question = await prisma.questions.create({
-      data: {
-        userId: userid,
-        question: body.title,
-        question_description: body.description,
-        anonymous: body.anonymous,
-        urgency: body.urgency,
-        questionReferences: {
-          create: body.referenceTags.map((ref: string) => ({ reference: ref })),
+    const question = await prisma.$transaction(async (tx) => {
+      const newQuestion = await tx.questions.create({
+        data: {
+          userId: userid,
+          question: body.title,
+          question_description: body.description,
+          anonymous: body.anonymous,
+          urgency: body.urgency,
+          questionReferences: {
+            create: body.referenceTags.map((ref: string) => ({ reference: ref })),
+          },
+          // Create multiple image links
+          question_image_links: body.imageUrls?.length ? {
+            create: body.imageUrls.map((url: string) => ({
+              question_image_link: url
+            }))
+          } : undefined
         },
-      },
+        include: {
+          question_image_links: true,
+          questionReferences: true
+        }
+      });
+
+      return newQuestion;
+    }, {
+      timeout: 10000
     });
 
     return c.json({
-        status: "success",
-        data: question
-    })
+      status: "success",
+      data: question
+    });
   } catch (e) {
-    console.log(e);
+    console.error(e);
+    return c.json({ 
+      status: "error", 
+      message: "Failed to create question" 
+    }, 500);
   }
 });
 
@@ -69,7 +87,7 @@ questions.get("/:id", async (c) => {
       return c.json({ status: "error", message: "User not found" }, 404);
     }
 
-    console.log(user);
+    
 
     // Get questions in priority order
     const cityDeptQuestions = await prisma.questions.findMany({
@@ -89,7 +107,8 @@ questions.get("/:id", async (c) => {
             city: true,
             department: true
           }
-        }
+        },
+        question_image_links: true
       },
       orderBy: {
         urgency: 'desc' // This will sort HIGH -> MEDIUM -> LOW
@@ -114,7 +133,8 @@ questions.get("/:id", async (c) => {
             city: true,
             department: true
           }
-        }
+        },
+        question_image_links: true
       },
       orderBy: {
         urgency: 'desc'
@@ -155,7 +175,8 @@ questions.get("/:id", async (c) => {
             city: true,
             department: true
           }
-        }
+        },
+        question_image_links: true
       },
       orderBy: {
         urgency: 'desc'
@@ -203,7 +224,8 @@ questions.get("/:id", async (c) => {
             city: true,
             department: true
           }
-        }
+        },
+        question_image_links: true
       },
       orderBy: {
         urgency: 'desc'

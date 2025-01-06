@@ -9,11 +9,17 @@ import signup from "./signup";
 import followRoute from "./follow/FollowRoute";
 import questions from "./questionAndAnswers/Questions";
 import answers from "./questionAndAnswers/answers";
+import { S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+import feed from "./Feed/feed";
 
 const app = new Hono<{
   Bindings: {
     DATABASE_URL: string;
     JWT_SECRET: string;
+    AWS_ACCESS_KEY: string;
+    AWS_SECRET: string;
   };
 }>();
 //cors middleware
@@ -29,11 +35,95 @@ app.use(
 
 app.route("/auth", auth);
 app.route("/signup", signup);
-app.route("/follow", followRoute)
-app.route("/questions",questions)
-app.route("/answer",answers)
+app.route("/follow", followRoute);
+app.route("/questions", questions);
+app.route("/answer", answers);
+app.route("/feed", feed)
 
+app.get("/get-upload-url", async (c) => {
+  const fileName = `uploads/${Date.now()}.jpg`;
+  const s3Client = new S3Client({
+    region: "ap-south-1",
+    credentials: {
+      accessKeyId: c.env.AWS_ACCESS_KEY,
+      secretAccessKey: c.env.AWS_SECRET,
+    },
+  });
 
+  const command = new PutObjectCommand({
+    Bucket: "dev-docsile-profile",
+    Key: fileName,
+  });
+
+  try {
+    const uploadURL = await getSignedUrl(s3Client, command, { expiresIn: 60 });
+    const imageURL = `https://dev-docsile-profile.s3.ap-south-1.amazonaws.com/${fileName}`;
+    return c.json({ uploadURL, imageURL });
+  } catch (error) {
+    return c.json({ error: "Failed to generate upload URL" }, 500);
+  }
+});
+
+app.post("/get-upload-urls", async (c) => {
+  const { fileCount, fileTypes, id, type } = await c.req.json();
+  
+  // Validate request
+  if (!fileCount || fileCount > 6 || !Array.isArray(fileTypes)) {
+    return c.json({ error: "Invalid request. Maximum 6 files allowed." }, 400);
+  }
+
+  const s3Client = new S3Client({
+    region: "ap-south-1",
+    credentials: {
+      accessKeyId: c.env.AWS_ACCESS_KEY,
+      secretAccessKey: c.env.AWS_SECRET,
+    },
+  });
+
+  try {
+    const urls = await Promise.all(
+      Array.from({ length: fileCount }).map(async (_, index) => {
+        const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+const fileName = `${id}/${type}/${uniqueSuffix}.${fileTypes[index].split("/")[1]}`;
+        const command = new PutObjectCommand({
+          Bucket: "dev-docsile-profile",
+          Key: fileName,
+          ContentType: fileTypes[index]
+        });
+
+        const uploadURL = await getSignedUrl(s3Client, command, { expiresIn: 60 });
+        const imageURL = `https://dev-docsile-profile.s3.ap-south-1.amazonaws.com/${fileName}`;
+        
+        return { uploadURL, imageURL };
+      })
+    );
+
+    console.log(urls);
+
+    return c.json({ urls });
+  } catch (error) {
+    console.error(error);
+    return c.json({ error: "Failed to generate upload URLs" }, 500);
+  }
+});
+
+// Add new endpoint to update profile picture URL
+app.post("/update-profile-picture", async (c) => {
+  const { userId, imageUrl } = await c.req.json();
+  const prisma = new PrismaClient({
+    datasourceUrl: c.env.DATABASE_URL,
+  }).$extends(withAccelerate());
+
+  try {
+    await prisma.user.update({
+      where: { id: parseInt(userId) },
+      data: { profile_picture: imageUrl },
+    });
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json({ error: "Failed to update profile picture" }, 500);
+  }
+});
 
 app.get("/check-verification", async (c) => {
   const userid = c.req.query("id") || "";
@@ -50,8 +140,9 @@ app.get("/check-verification", async (c) => {
       const decoded: any = await verify(verifiedcookie, c.env.JWT_SECRET);
 
       console.log(decoded);
+      const intdecodedId = parseInt(decoded.userId);
 
-      if (decoded.userId === intUserId) {
+      if (intdecodedId === intUserId) {
         return c.json({ verified: true });
       } else {
         return c.json({ message: "Token user mismatch" }, 403);
@@ -76,7 +167,11 @@ app.get("/check-verification", async (c) => {
     if (user.register_number && user.verified) {
       // User is verified, generate a new token
       const newToken = await sign(
-        { userId: user.id, registrationNo: user.register_number, medicalCouncil: user.medical_counsel },
+        {
+          userId: user.id,
+          registrationNo: user.register_number,
+          medicalCouncil: user.medical_counsel,
+        },
         c.env.JWT_SECRET
       );
 
@@ -100,98 +195,59 @@ app.get("/check-verification", async (c) => {
 });
 
 app.get("/profile/:id", async (c) => {
-  const params = c.req.param();
-  const userid = parseInt(params.id);
+  const userid = parseInt(c.req.param("id"));
 
   const prisma = new PrismaClient({
     datasourceUrl: c.env.DATABASE_URL,
   }).$extends(withAccelerate());
 
   try {
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userid,
+    const userData = await prisma.user.findUnique({
+      where: { id: userid },
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        profile_picture: true,
+        specialisation_field_of_study: true,
+        organisation_name: true,
+        department: true,
+        questions: true,
+        posts: true,
+        certifications: true,
+        achievementsAwards: true,
+        professionalExperience: true,
+        education: true,
+        memberships: true,
+        // email and password are excluded
       },
     });
 
-    const questions = await prisma.questions.findMany({
-      where: {
-        userId: userid,
-      },
-    });
-
-    const posts = await prisma.posts.findMany({
-      where: {
-        userId: userid,
-      },
-    });
-
-  
-
-    const certificates = await prisma.certifications.findMany({
-      where: {
-        userId: userid,
-      },
-    });
-
-    const awards = await prisma.achievementsAwards.findMany({
-      where: {
-        userId: userid,
-      },
-    });
-
-    const experiences = await prisma.professionalExperience.findMany({
-      where: {
-        userId: userid,
-      },
-    });
-
-    const educations = await prisma.education.findMany({
-      where: {
-        userId: userid,
-      },
-    });
-
-    const memberships = await prisma.memberships.findMany({
-      where: {
-        userId: userid,
-      },
-    });
-
-    if (!user) {
-      return c.json(
-        {
-          message: "User not found",
-        },
-        404
-      );
+    if (!userData) {
+      return c.json({ message: "User not found" }, 404);
     }
 
-    console.log("databse ki ochindhi bhai");
-
     return c.json({
-      user: user,
-      questions: questions,
-      posts: posts,
-      certificates: certificates,
-      awards: awards,
-      experiences: experiences,
-      educations: educations,
-      memberships: memberships,
+      status: "success",
+      data: userData,
     });
   } catch (e) {
-    console.log(e);
+    console.error("Error fetching profile:", e);
+    return c.json(
+      {
+        status: "error",
+        message: "Failed to fetch profile data",
+      },
+      500
+    );
   }
 });
 
 // ask question
 
-
 app.post("/publish-post/:id", async (c) => {
   const body = await c.req.json();
-
   const params = c.req.param();
-
   const userid = parseInt(params.id);
 
   const prisma = new PrismaClient({
@@ -199,17 +255,39 @@ app.post("/publish-post/:id", async (c) => {
   }).$extends(withAccelerate());
 
   try {
-    const post = await prisma.posts.create({
-      data: {
-        userId: userid,
-        title: body.title,
-        description: body.description,
-      },
-    });
+    const post = await prisma.$transaction(async (tx) => {
+      const newPost = await tx.posts.create({
+        data: {
+          userId: userid,
+          title: body.title,
+          description: body.description,
+          postImageLinks: body.imageUrls?.length ? {
+            create: body.imageUrls.map((url: string) => ({
+              postImageLink: url
+            }))
+          } : undefined
+        },
+        include: {
+          postImageLinks: true
+        }
+      });
 
-    return c.json(post);
+      return newPost;
+    }, { timeout: 10000 });
+
+    return c.json({
+      status: "success",
+      data: post,
+    });
   } catch (e) {
-    return c.json({ e });
+    console.error(e);
+    return c.json(
+      {
+        status: "error",
+        message: "Failed to create post",
+      },
+      500
+    );
   }
 });
 
@@ -219,6 +297,10 @@ app.post("/add-certificate/:id", async (c) => {
   const params = c.req.param();
 
   const userid = parseInt(params.id);
+
+  console.log(body.imageUrl);
+
+  const mediaLink = body.imageUrl || '';
 
   const prisma = new PrismaClient({
     datasourceUrl: c.env.DATABASE_URL,
@@ -233,6 +315,7 @@ app.post("/add-certificate/:id", async (c) => {
         issueDate: body.issueDate,
         certificateURL: body.certificateURL,
         descreption: body.descreption,
+        certificateMediaLink : mediaLink
       },
     });
 
@@ -316,7 +399,7 @@ app.post("/add-memberships/:id", async (c) => {
     const post = await prisma.memberships.create({
       data: {
         userId: userid,
-        societyname: body.societyname,
+        societyname: body.societyName,
         position: body.position,
         relatedDepartment: body.relatedDepartment,
         membershipId: body.membershipId,
@@ -363,14 +446,17 @@ app.get("/connections/:id", async (c) => {
             NOT: {
               followers: {
                 some: {
-                  followingId: userid
-                }
-              }
-            }
+                  followingId: userid,
+                },
+              },
+            },
           },
           {
             OR: [
-              { specialisation_field_of_study: user.specialisation_field_of_study },
+              {
+                specialisation_field_of_study:
+                  user.specialisation_field_of_study,
+              },
               { department: user.department },
               { city: user.city },
               { organisation_name: user.organisation_name },
@@ -399,21 +485,21 @@ app.get("/connections/:id", async (c) => {
               NOT: {
                 followers: {
                   some: {
-                    followingId: userid
-                  }
-                }
-              }
+                    followingId: userid,
+                  },
+                },
+              },
             },
             // Exclude users already in exactMatches
             {
               id: {
-                notIn: exactMatches.map(user => user.id)
-              }
-            }
+                notIn: exactMatches.map((user) => user.id),
+              },
+            },
           ],
         },
         orderBy: {
-          created_at: 'desc' // Show newest users first
+          created_at: "desc", // Show newest users first
         },
         take: remainingCount,
       });
@@ -440,7 +526,7 @@ app.get("/connections/network/:id", async (c) => {
     // Get followers (people who follow the user)
     const followers = await prisma.follow.findMany({
       where: {
-        followingId: userid
+        followingId: userid,
       },
       select: {
         follower: {
@@ -449,16 +535,16 @@ app.get("/connections/network/:id", async (c) => {
             name: true,
             specialisation_field_of_study: true,
             organisation_name: true,
-            city: true
-          }
-        }
-      }
+            city: true,
+          },
+        },
+      },
     });
 
     // Get following (people whom the user follows)
     const following = await prisma.follow.findMany({
       where: {
-        followerId: userid
+        followerId: userid,
       },
       select: {
         following: {
@@ -467,23 +553,22 @@ app.get("/connections/network/:id", async (c) => {
             name: true,
             specialisation_field_of_study: true,
             organisation_name: true,
-            city: true
-          }
-        }
-      }
+            city: true,
+          },
+        },
+      },
     });
 
     // Transform the data to flatten the structure
-    const formattedFollowers = followers.map(f => f.follower);
-    const formattedFollowing = following.map(f => f.following);
+    const formattedFollowers = followers.map((f) => f.follower);
+    const formattedFollowing = following.map((f) => f.following);
 
     return c.json({
       followers: formattedFollowers,
       following: formattedFollowing,
       followersCount: formattedFollowers.length,
-      followingCount: formattedFollowing.length
+      followingCount: formattedFollowing.length,
     });
-
   } catch (error) {
     console.error(error);
     return c.json({ message: "Error fetching network data" }, 500);

@@ -69,7 +69,7 @@ function Memberships() {
   async function handleSubmit() {
     try {
       const response = await axios.post(
-        `${BACKEND_URL}/add-certificate/${id}`,
+        `${BACKEND_URL}/add-memberships/${id}`,
         {
           societyName: formData.societyName,
           position: formData.position,
@@ -79,7 +79,7 @@ function Memberships() {
       );
 
       console.log(response);
-      navigate("/");
+      navigate(`/profile/${id}`);
     } catch (e) {
       console.log(e);
     }

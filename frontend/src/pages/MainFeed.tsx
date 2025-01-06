@@ -9,7 +9,6 @@ import {
 import messageicon from "../assets/messageicon.svg";
 import cardprofileimg from "../assets/cardprofileimg.svg";
 import PostCard from "../components/PostCard";
-import QuestionCard from "../components/QuestionCard";
 import profilepic from "../assets/ProfilePic.svg";
 import BottomNavbar from "../components/BottomNavbar";
 import { useEffect, useRef, useState } from "react";
@@ -19,21 +18,19 @@ import posticon from "../assets/posticon.svg";
 import reporticon from "../assets/reporticon.svg";
 
 // backend imports
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import MainfeedPulseAndPost from "../components/MainfeedPulseAndPost";
 import TopNavbar from "@/components/TopNavbar";
 
 import { capitalizeFirstLetter, truncateString } from "@/functions";
-import test2profilepic from "../assets/test2.png";
-import test3profilepic from "../assets/test3.png";
+
 import test4profilepic from "../assets/test4.jpg";
-import heartTest from "../assets/heartTest2.jpeg";
-import test5img from "../assets/test5.jpg";
-import test6img from "../assets/test6.webp";
+
 import { Dialog } from "@/components/Dialog";
 import axios from "axios";
 import { BACKEND_URL } from "@/config";
 import { toast, Toaster } from "sonner";
+import QuestionCard from '../components/QuestionCard';
 
 function MainFeed() {
   const location = useLocation();
@@ -101,7 +98,10 @@ function MainFeed() {
       if (verified) {
         toast.dismiss(loading);
         toast.success("Verified redirecting to ask question");
+
         navigate(`/ask-question/${userId}`);
+
+        //CHECKING
       } else {
         toast.dismiss(loading);
         toast.warning("Please verify your medical registration first");
@@ -114,12 +114,11 @@ function MainFeed() {
   }
 
   async function handleAddPost() {
-
     const loading = toast.loading("Checking verification status");
 
-    console.log(typeof(userId));
+    console.log(typeof userId);
 
-    try{
+    try {
       const response = await axios.get(`${BACKEND_URL}/check-verification`, {
         params: { id: userId },
       });
@@ -134,16 +133,37 @@ function MainFeed() {
         toast.warning("Please verify your medical registration first");
         setShowDialog(true);
       }
-    }
-    catch (e) {
+    } catch (e) {
       toast.dismiss(loading);
       toast.error("Something went wrong. Please try again later");
       console.error(e);
-  }
+    }
   }
   function handleShareReport() {}
 
   //backend
+
+  const [feedItems, setFeedItems] = useState<any[]>([]);
+  const [recommendedUsers, setRecommendedUsers] = useState<any[]>([]);
+  const [userDetails , setUserDetails] = useState<any>({})
+
+  useEffect(() => {
+    async function getFeed() {
+      const loading = toast.loading("Loading...");
+      try {
+        const response = await axios.get(`${BACKEND_URL}/feed/${userId}`);
+        setFeedItems(response.data.data);
+        setRecommendedUsers(response.data.recommendedUsers);
+        setUserDetails(response.data.userDetails)
+        toast.dismiss(loading);
+      } catch (e) {
+        console.log(e);
+        toast.dismiss(loading);
+      }
+    }
+
+    getFeed();
+  }, [userId]);
 
   function handleCloseDialog() {
     setShowDialog(false);
@@ -158,8 +178,8 @@ function MainFeed() {
     try {
       const response = await axios.post(`${BACKEND_URL}/verify-doctor`, {
         registrationNo: text,
-        medicalCouncil : "Andhra Pradesh Medical Council",
-        userId : userId
+        medicalCouncil: "Andhra Pradesh Medical Council",
+        userId: userId,
       });
 
       console.log(response.data);
@@ -179,11 +199,13 @@ function MainFeed() {
     }
   }
 
+ 
+
   return (
     <UserContext.Provider value={{ id: userId }}>
       <div className="bg-white flex  min-h-screen  flex-col ">
         <TopNavbar />
-        <Toaster/>
+        <Toaster />
 
         <Dialog isOpen={showDialog} onClose={handleCloseDialog}>
           <div className="text-center p-2">
@@ -217,13 +239,11 @@ function MainFeed() {
                   <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white opacity-20 rounded-full" />
                 </div>
 
-            
-
                 {/* Name and Title */}
-                <h2 className="mt-4 text-3xl font-bold text-main">Srilatha</h2>
-                <p className="text-gray-700 font-medium">Opthalmology</p>
-                <p className="text-sm text-gray-500">Sri harsha eye hospital</p>
-                <p className="text-sm text-gray-500">Karimnagar, Telangana</p>
+                <h2 className="mt-4 text-3xl font-bold text-main">{userDetails ? capitalizeFirstLetter(userDetails.name) : ''}</h2>
+                <p className="text-gray-700 font-medium">{userDetails ? capitalizeFirstLetter(userDetails.department) : ''}</p>
+                <p className="text-sm text-gray-500">{userDetails ? capitalizeFirstLetter(userDetails.organisation_name) : ""}</p>
+                <p className="text-sm text-gray-500">{userDetails ? capitalizeFirstLetter(userDetails.city) : ''}</p>
 
                 {/* Social Icons */}
                 <div className="flex items-center justify-center space-x-3 mt-6">
@@ -327,43 +347,50 @@ function MainFeed() {
 
                 {/* post card */}
 
-                <PostCard
-                  cardprofileimg={test3profilepic}
-                  poster={"Dr. Ganapathi rao"}
-                  posterdetails={"Cardiologist"}
-                  date={"Oct 8"}
-                  posttitle={"Benifits of Heart"}
-                  postimg={heartTest}
-                  postcontent={`The heart plays a central role in maintaining overall health and well-being. Here are some benefits of a healthy heart and its essential functions: 
-                    The heart pumps oxygen-rich blood to every part of the body, ensuring that organs and tissues receive the nutrients and oxygen they need to function properly.
-                    It removes carbon dioxide and other waste products through circulation.`}
-                />
+                {feedItems?.length > 0 ? (
+                  feedItems.map((item: any) => {
+                    // Check if item is a post (has posted_at) or question (has asked_at)
+                    if (item.posted_at) {
+                      return (
+                        <PostCard
+                          key={`post-${item.id}`}
+                          poster={item.User.name}
+                          posttitle={item.title}
+                          posterdetails={`${item.User.department} | ${item.User.organisation_name}`}
+                          date={new Date(item.posted_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                          postimg={item.postImageLinks}
+                          postcontent={item.description}
+                          cardprofileimg={item.User.profile_picture || cardprofileimg}
+                        />
+                      );
+                    } else {
+                      return (
+                        <QuestionCard
+                          key={`question-${item.id}`}
+                          cardprofileimg={item.User.profile_picture || cardprofileimg}
+                          questionimg={item.question_image_links}
+                          questioner={item.User.name}
+                          questionerdetails={`${item.User.department} | ${item.User.organisation_name}`}
+                          questiondate={new Date(item.asked_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                          question={item.question}
+                          questiondescription={item.question_description}
+                          commentimg={cardprofileimg}
+                          id={item.id}
+                        />
+                      );
+                    }
+                  })
+                ) : (
+                  <p>No items available</p>
+                )}
 
-                <QuestionCard
-                  cardprofileimg={test2profilepic}
-                  questionimg={test5img}
-                  questioner={"Dr. Lavanya Seelam"}
-                  questionerdetails={"Orthopedic surgeon"}
-                  questiondate={"Oct 7"}
-                  question={"what are the main reasons for weakness in bone ?"}
-                  questiondescription={
-                    "I'm curious about the factors that contribute to bone weakness. Despite trying to maintain a healthy lifestyle, I’ve noticed some issues that might be related to bone health, such as persistent fatigue or minor injuries taking longer to heal. Could you explain the common causes of weakened bones and what steps can be taken to prevent or address this issue?"
-                  }
-                  commentimg={cardprofileimg}
-                />
-
-                <PostCard
-                  cardprofileimg={cardprofileimg}
-                  poster={"Dr. Ganapathi rao"}
-                  posterdetails={"Cardiologist"}
-                  date={"Oct 8"}
-                  posttitle={"Advancements in eye care : Smart Contact Lenses"}
-                  postimg={test6img}
-                  postcontent={
-                    " These lenses are being developed to monitor health metrics like glucose levels and intraocular pressure, providing real-time feedback to users."
-                  }
-                />
-
+            
                 {/* bottom navbar */}
 
                 <div className=" lg:hidden">
@@ -375,106 +402,40 @@ function MainFeed() {
 
           <div className="hidden lg:block lg:w-[30%]">
             <div className="sticky top-20">
-              <div className="flex flex-col  p-2 bg-white rounded-xl">
+              <div className="flex flex-col p-2 bg-white rounded-xl">
                 <p className="flex flex-row items-start justify-start w-full p-2">
-                  People you may know :{" "}
+                  People you may know:{" "}
                 </p>
 
-                <div className="flex items-center p-2   cursor-pointer bg-white overflow-hidden ">
-                  <img
-                    src={profilepic}
-                    alt={`${name}'s profile`}
-                    className="w-11 h-11 rounded-full mr-2"
-                  />
-                  <div className="flex-1 text-left ">
-                    <p className="font-semibold text-xs text-gray-800">
-                      {capitalizeFirstLetter("Vamshidhar")}
-                    </p>
-                    <p className="text-[0.7rem] text-gray-600 ">
-                      {truncateString(
-                        "Opthalmology | Sriharsha Eye Hospital | Hyderbad, Telangana",
-                        50
-                      )}
-                    </p>
-                  </div>{" "}
-                  <div className="flex flex-row justify-between items-center">
-                    <button className="text-white bg-main py-1 px-3 text-xs   mt-2 rounded-3xl border border-main hover:bg-white hover:text-main">
-                      Follow
-                    </button>
+                {recommendedUsers?.map((user) => (
+                  <div key={user.id} className="flex items-center p-2 cursor-pointer bg-white overflow-hidden">
+                    <img
+                      src={user.profile_picture || profilepic}
+                      alt={`${user.name}'s profile`}
+                      className="w-11 h-11 rounded-full mr-2"
+                    />
+                    <div className="flex-1 text-left">
+                      <p className="font-semibold text-xs text-gray-800">
+                        {capitalizeFirstLetter(user.name)}
+                      </p>
+                      <p className="text-[0.7rem] text-gray-600">
+                        {truncateString(
+                          `${user.department} | ${user.organisation_name} | ${user.city}`,
+                          50
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex flex-row justify-between items-center">
+                      <button className="text-white bg-main py-1 px-3 text-xs mt-2 rounded-3xl border border-main hover:bg-white hover:text-main">
+                        Follow
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ))}
 
-                <div className="flex items-center p-2   cursor-pointer bg-white overflow-hidden ">
-                  <img
-                    src={profilepic}
-                    alt={`${name}'s profile`}
-                    className="w-11 h-11 rounded-full mr-2"
-                  />
-                  <div className="flex-1 text-left ">
-                    <p className="font-semibold text-xs text-gray-800">
-                      {capitalizeFirstLetter("Vamshidhar")}
-                    </p>
-                    <p className="text-[0.7rem] text-gray-600 ">
-                      {truncateString(
-                        "Opthalmology | Sriharsha Eye Hospital | Hyderbad, Telangana",
-                        50
-                      )}
-                    </p>
-                  </div>{" "}
-                  <div className="flex flex-row justify-between items-center">
-                    <button className="text-white bg-main py-1 px-3 text-xs   mt-2 rounded-3xl border border-main hover:bg-white hover:text-main">
-                      Follow
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center p-2   cursor-pointer bg-white overflow-hidden ">
-                  <img
-                    src={profilepic}
-                    alt={`${name}'s profile`}
-                    className="w-11 h-11 rounded-full mr-2"
-                  />
-                  <div className="flex-1 text-left ">
-                    <p className="font-semibold text-xs text-gray-800">
-                      {capitalizeFirstLetter("Vamshidhar")}
-                    </p>
-                    <p className="text-[0.7rem] text-gray-600 ">
-                      {truncateString(
-                        "Opthalmology | Sriharsha Eye Hospital | Hyderbad, Telangana",
-                        50
-                      )}
-                    </p>
-                  </div>{" "}
-                  <div className="flex flex-row justify-between items-center">
-                    <button className="text-white bg-main py-1 px-3 text-xs   mt-2 rounded-3xl border border-main hover:bg-white hover:text-main">
-                      Follow
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center p-2   cursor-pointer bg-white overflow-hidden ">
-                  <img
-                    src={profilepic}
-                    alt={`${name}'s profile`}
-                    className="w-11 h-11 rounded-full mr-2"
-                  />
-                  <div className="flex-1 text-left ">
-                    <p className="font-semibold text-xs text-gray-800">
-                      {capitalizeFirstLetter("Vamshidhar")}
-                    </p>
-                    <p className="text-[0.7rem] text-gray-600 ">
-                      {truncateString(
-                        "Opthalmology | Sriharsha Eye Hospital | Hyderbad, Telangana",
-                        50
-                      )}
-                    </p>
-                  </div>{" "}
-                  <div className="flex flex-row justify-between items-center">
-                    <button className="text-white bg-main py-1 px-3 text-xs   mt-2 rounded-3xl border border-main hover:bg-white hover:text-main">
-                      Follow
-                    </button>
-                  </div>
-                </div>
+                {recommendedUsers?.length === 0 && (
+                  <p className="text-sm text-gray-500 p-2">No recommendations available</p>
+                )}
               </div>
             </div>
           </div>
